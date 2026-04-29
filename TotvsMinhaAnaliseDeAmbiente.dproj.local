@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2026/04/27 19:28:56.000.085,=C:\Users\cleber.reginaldo\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2026/04/27 19:38:48.000.750,C:\Projetos\Totvs Minha Analise de Ambiente\fPrincipal.dfm=C:\Users\cleber.reginaldo\Documents\Embarcadero\Studio\Projects\Unit1.dfm</Transaction>
+    <Transaction>2026/04/27 19:38:48.000.750,C:\Projetos\Totvs Minha Analise de Ambiente\fPrincipal.pas=C:\Users\cleber.reginaldo\Documents\Embarcadero\Studio\Projects\Unit1.pas</Transaction>
+    <Transaction>2026/04/27 19:39:01.000.555,C:\Projetos\Totvs Minha Analise de Ambiente\TotvsMinhaAnaliseDeAmbiente.dproj=C:\Users\cleber.reginaldo\Documents\Embarcadero\Studio\Projects\Project1.dproj</Transaction>
+  </Transactions>
+</BorlandProject>
