@@ -24,9 +24,9 @@ type
     TabRede: TTabSheet;
     LstPrincipal: TListBox;
     MemoResult: TMemo;
-    procedure AdicionarItem(Texto: String; CorLinha: TColor);
-    procedure AdicionarItemDetalhe(TextoLista, TextoMemo: String;
-      CorLinha: TColor);
+    procedure AdicionarItem(Texto: String; CorLinha: TColor); overload;
+    procedure AdicionarItem(TextoLista, TextoMemo: String;
+      CorLinha: TColor); overload;
     procedure FormCreate(Sender: TObject);
     procedure LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
@@ -62,10 +62,10 @@ implementation
 
 procedure TPrincipal.AdicionarItem(Texto: String; CorLinha: TColor);
 begin
-  AdicionarItemDetalhe(Texto, Texto, CorLinha);
+  AdicionarItem(Texto, Texto, CorLinha);
 end;
 
-procedure TPrincipal.AdicionarItemDetalhe(TextoLista, TextoMemo: String;
+procedure TPrincipal.AdicionarItem(TextoLista, TextoMemo: String;
   CorLinha: TColor);
 var
   Obj: TCorItem;
@@ -191,17 +191,13 @@ end;
 
 procedure TPrincipal.SpeedButton6Click(Sender: TObject);
 begin
-  AdicionarItemDetalhe('Venda Concluída',
-    'Pedido #1042 finalizado com sucesso.',
+  AdicionarItem('Venda Concluída', 'Pedido #1042 finalizado com sucesso.',
     clMoneyGreen);
-  AdicionarItemDetalhe('Erro no Sistema',
-    'Falha de integração com o serviço fiscal.',
+  AdicionarItem('Erro no Sistema', 'Falha de integração com o serviço fiscal.',
     clRed);
-  AdicionarItemDetalhe('Em Andamento',
-    'Processamento do lote 07 ainda em execução.',
+  AdicionarItem('Em Andamento', 'Processamento do lote 07 ainda em execução.',
     clYellow);
-  AdicionarItemDetalhe('Finalizado', 'Rotina encerrada e recursos liberados.',
-    clAqua);
+  AdicionarItem('Finalizado', 'Rotina encerrada e recursos liberados.', clAqua);
 end;
 
 function TPrincipal.VerificaEstrutura: Boolean;
