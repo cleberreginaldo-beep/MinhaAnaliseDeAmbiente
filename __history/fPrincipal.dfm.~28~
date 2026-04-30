@@ -1,0 +1,196 @@
+object Principal: TPrincipal
+  Left = 0
+  Top = 0
+  BorderIcons = [biSystemMenu, biMinimize]
+  BorderStyle = bsSingle
+  Caption = 'Totvs Minha An'#225'lise de Ambiente'
+  ClientHeight = 665
+  ClientWidth = 876
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'Tahoma'
+  Font.Style = []
+  Position = poDesktopCenter
+  OnActivate = FormActivate
+  OnCreate = FormCreate
+  TextHeight = 13
+  object Panel1: TPanel
+    Left = 0
+    Top = 0
+    Width = 66
+    Height = 665
+    Align = alLeft
+    BevelInner = bvRaised
+    BevelOuter = bvLowered
+    TabOrder = 0
+    ExplicitHeight = 661
+    object SpeedButton1: TSpeedButton
+      Left = 5
+      Top = 9
+      Width = 55
+      Height = 50
+      OnClick = SpeedButton1Click
+    end
+    object SpeedButton2: TSpeedButton
+      Left = 5
+      Top = 65
+      Width = 55
+      Height = 50
+    end
+    object SpeedButton3: TSpeedButton
+      Left = 5
+      Top = 120
+      Width = 55
+      Height = 50
+    end
+    object SpeedButton4: TSpeedButton
+      Left = 5
+      Top = 175
+      Width = 55
+      Height = 50
+    end
+    object SpeedButton5: TSpeedButton
+      Left = 5
+      Top = 230
+      Width = 55
+      Height = 50
+    end
+    object SpeedButton6: TSpeedButton
+      Left = 5
+      Top = 286
+      Width = 55
+      Height = 50
+      OnClick = SpeedButton6Click
+    end
+  end
+  object Panel2: TPanel
+    Left = 66
+    Top = 0
+    Width = 810
+    Height = 665
+    Align = alClient
+    BevelInner = bvRaised
+    BevelOuter = bvLowered
+    TabOrder = 1
+    ExplicitWidth = 808
+    ExplicitHeight = 661
+    object pgPrincipal: TPageControl
+      Left = 2
+      Top = 2
+      Width = 806
+      Height = 661
+      ActivePage = tabLogin
+      Align = alClient
+      TabOrder = 0
+      object TabAnalise: TTabSheet
+        Caption = 'tabAnalise'
+        object LstPrincipal: TListBox
+          Left = 0
+          Top = 3
+          Width = 800
+          Height = 514
+          ItemHeight = 13
+          TabOrder = 0
+          OnDrawItem = LstPrincipalDrawItem
+        end
+        object MemoResult: TMemo
+          Left = 0
+          Top = 520
+          Width = 800
+          Height = 110
+          ImeName = 'Portuguese (Brazilian ABNT)'
+          Lines.Strings = (
+            'MemoResult')
+          ScrollBars = ssVertical
+          TabOrder = 1
+        end
+      end
+      object TabMonitor: TTabSheet
+        Caption = 'tabMonitor'
+        ImageIndex = 1
+      end
+      object TabRede: TTabSheet
+        Caption = 'Rede'
+        ImageIndex = 2
+      end
+      object tabLogin: TTabSheet
+        Caption = 'Login'
+        ImageIndex = 3
+        ImageName = 'TabLogin'
+        object Label1: TLabel
+          Left = 128
+          Top = 416
+          Width = 3
+          Height = 13
+          Visible = False
+        end
+        object GroupBox1: TGroupBox
+          Left = 208
+          Top = 162
+          Width = 305
+          Height = 199
+          Caption = 'Login'
+          TabOrder = 0
+          object lblUsuario: TLabel
+            Left = 40
+            Top = 48
+            Width = 36
+            Height = 13
+            Caption = 'Usu'#225'rio'
+          end
+          object lblSenha: TLabel
+            Left = 40
+            Top = 72
+            Width = 30
+            Height = 13
+            Caption = 'Senha'
+          end
+          object lblBanco: TLabel
+            Left = 40
+            Top = 104
+            Width = 29
+            Height = 13
+            Caption = 'Banco'
+          end
+          object edtUsuario: TEdit
+            Left = 104
+            Top = 40
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            CanUndoSelText = True
+            TabOrder = 0
+          end
+          object edtSenha: TEdit
+            Left = 104
+            Top = 67
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            CanUndoSelText = True
+            TabOrder = 1
+          end
+          object cbxDataBase: TComboBox
+            Left = 104
+            Top = 94
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            TabOrder = 2
+          end
+          object btnConectar: TButton
+            Left = 136
+            Top = 136
+            Width = 75
+            Height = 25
+            Caption = 'Conectar'
+            TabOrder = 3
+            OnClick = btnConectarClick
+          end
+        end
+      end
+    end
+  end
+end

@@ -13,9 +13,10 @@ object Principal: TPrincipal
   Font.Name = 'Tahoma'
   Font.Style = []
   Position = poDesktopCenter
+  OnActivate = FormActivate
   OnCreate = FormCreate
   TextHeight = 13
-  object Panel1: TPanel
+  object pnLateral: TPanel
     Left = 0
     Top = 0
     Width = 66
@@ -23,8 +24,9 @@ object Principal: TPrincipal
     Align = alLeft
     BevelInner = bvRaised
     BevelOuter = bvLowered
+    Enabled = False
     TabOrder = 0
-    ExplicitHeight = 653
+    ExplicitHeight = 661
     object SpeedButton1: TSpeedButton
       Left = 5
       Top = 9
@@ -73,23 +75,21 @@ object Principal: TPrincipal
     BevelInner = bvRaised
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 806
-    ExplicitHeight = 653
+    ExplicitWidth = 808
+    ExplicitHeight = 661
     object pgPrincipal: TPageControl
       Left = 2
       Top = 2
       Width = 806
       Height = 661
-      ActivePage = TabAnalise
+      ActivePage = tabLogin
       Align = alClient
       TabOrder = 0
-      ExplicitWidth = 802
-      ExplicitHeight = 649
       object TabAnalise: TTabSheet
         Caption = 'tabAnalise'
         object LstPrincipal: TListBox
           Left = 0
-          Top = 0
+          Top = 3
           Width = 800
           Height = 514
           ItemHeight = 13
@@ -116,6 +116,92 @@ object Principal: TPrincipal
         Caption = 'Rede'
         ImageIndex = 2
       end
+      object tabLogin: TTabSheet
+        Caption = 'Login'
+        ImageIndex = 3
+        ImageName = 'TabLogin'
+        object Label1: TLabel
+          Left = 128
+          Top = 416
+          Width = 461
+          Height = 13
+          Caption = 
+            'Remover daqui, N'#195'O ESQUECER, pois este usuario tem que vir da fu' +
+            'n'#231#227'o ProcurarValorRegistro'
+          Visible = False
+        end
+        object GroupBox1: TGroupBox
+          Left = 208
+          Top = 162
+          Width = 305
+          Height = 199
+          Caption = 'Login'
+          TabOrder = 0
+          object lblUsuario: TLabel
+            Left = 40
+            Top = 48
+            Width = 36
+            Height = 13
+            Caption = 'Usu'#225'rio'
+          end
+          object lblSenha: TLabel
+            Left = 40
+            Top = 72
+            Width = 30
+            Height = 13
+            Caption = 'Senha'
+          end
+          object lblBanco: TLabel
+            Left = 40
+            Top = 104
+            Width = 29
+            Height = 13
+            Caption = 'Banco'
+          end
+          object edtUsuario: TEdit
+            Left = 104
+            Top = 40
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            CanUndoSelText = True
+            TabOrder = 0
+          end
+          object edtSenha: TEdit
+            Left = 104
+            Top = 67
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            CanUndoSelText = True
+            TabOrder = 1
+          end
+          object cbxDataBase: TComboBox
+            Left = 104
+            Top = 94
+            Width = 150
+            Height = 21
+            ImeName = 'Portuguese (Brazilian ABNT)'
+            TabOrder = 2
+          end
+          object btnConectar: TButton
+            Left = 136
+            Top = 136
+            Width = 75
+            Height = 25
+            Caption = 'Conectar'
+            TabOrder = 3
+            OnClick = btnConectarClick
+          end
+        end
+      end
     end
+  end
+  object IdTCPClient1: TIdTCPClient
+    ConnectTimeout = 0
+    Port = 0
+    ReadTimeout = -1
+    Left = 104
+    Top = 578
   end
 end

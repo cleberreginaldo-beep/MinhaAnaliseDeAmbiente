@@ -1,0 +1,12 @@
+object Dm: TDm
+  Height = 750
+  Width = 1000
+  PixelsPerInch = 120
+  object Fdc: TFDConnection
+    Params.Strings = (
+      'ConnectionDef=Fdc')
+    LoginPrompt = False
+    Left = 32
+    Top = 32
+  end
+end

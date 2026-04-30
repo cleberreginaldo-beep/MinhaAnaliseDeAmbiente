@@ -1,4 +1,4 @@
-unit fPrincipal;
+﻿unit fPrincipal;
 
 interface
 
@@ -6,11 +6,18 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
   System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.Buttons, Vcl.ComCtrls,
-  Vcl.StdCtrls, Registry;
+  Vcl.StdCtrls, Registry, FireDAC.Comp.Client,
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+  FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.Oracle,
+  FireDAC.Phys.OracleDef, FireDAC.VCLUI.Wait, FireDAC.Stan.Param, FireDAC.DatS,
+  FireDAC.DApt.Intf, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet,
+  Winapi.WinSock, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient;
 
 type
   TPrincipal = class(TForm)
-    Panel1: TPanel;
+    pnLateral: TPanel;
     SpeedButton1: TSpeedButton;
     SpeedButton2: TSpeedButton;
     SpeedButton3: TSpeedButton;
@@ -24,7 +31,17 @@ type
     TabRede: TTabSheet;
     LstPrincipal: TListBox;
     MemoResult: TMemo;
-    procedure AdicionarItem(Texto: String; CorLinha: TColor); overload;
+    tabLogin: TTabSheet;
+    GroupBox1: TGroupBox;
+    edtUsuario: TEdit;
+    edtSenha: TEdit;
+    lblUsuario: TLabel;
+    lblSenha: TLabel;
+    lblBanco: TLabel;
+    cbxDataBase: TComboBox;
+    btnConectar: TButton;
+    Label1: TLabel;
+    IdTCPClient1: TIdTCPClient;
     procedure AdicionarItem(TextoLista, TextoMemo: String;
       CorLinha: TColor); overload;
     procedure FormCreate(Sender: TObject);
@@ -34,11 +51,22 @@ type
     function VerificaEstrutura: Boolean;
     function EncontrarUnidadeAcrux: string;
     function EspacoEmDiscoLivre(): Int64;
-    procedure GetProcessorName;
-    procedure GetProcessorCoreCount;
+    function GetProcessorName: string;
+    function GetProcessorCoreCount: Integer;
+    function GetTotalMemory: Double;
+    function GetTNSNamesPath: string;
+    function ProcurarValorRegistro(RootKey: HKEY; ChaveAtual: string;
+      ValorProcurado: string): TStringList;
+    function GetLocalIP: string;
+    function TestaConexao(sIP: string; nPorta: Integer): string;
+
     procedure SpeedButton1Click(Sender: TObject);
     procedure LstPrincipalClick(Sender: TObject);
     procedure LimparItensLista;
+    procedure FormActivate(Sender: TObject);
+    procedure ParseTNS;
+    procedure AtivaPage(APageControl: TPageControl; APage: TTabSheet);
+    procedure btnConectarClick(Sender: TObject);
 
   private
     { Private declarations }
@@ -55,16 +83,23 @@ type
 var
   Principal: TPrincipal;
   sUnidade: String;
+  sUsuarioConsincoMonitor: String;
+  sUsuarioConsinco: String;
+  sResult: TStringList;
+  sEmpresaPDVs: TStringList;
+  slTNSConfig: TStringList;
 
 implementation
 
 {$R *.dfm}
 
-procedure TPrincipal.AdicionarItem(Texto: String; CorLinha: TColor);
-begin
-  AdicionarItem(Texto, Texto, CorLinha);
-end;
+uses fDm;
 
+{ procedure TPrincipal.AdicionarItem(Texto: String; CorLinha: TColor);
+  begin
+  AdicionarItem(Texto, Texto, CorLinha);
+  end;
+}
 procedure TPrincipal.AdicionarItem(TextoLista, TextoMemo: String;
   CorLinha: TColor);
 var
@@ -87,6 +122,47 @@ begin
   LstPrincipal.Clear;
 end;
 
+procedure TPrincipal.FormActivate(Sender: TObject);
+var
+  sQryOwnner: TFDQuery;
+begin
+  AtivaPage(pgPrincipal, tabLogin);
+  // edtUsuario.Text := 'CONSINCOMONITOR';
+  // edtSenha.Text := 'CONSINCOMONITOR';
+  // Ajusta data no padrão dd/mm/yyyy para não falhar na validação de data, caso as config regionais da maquina estejam diferentes do padrão
+  System.SysUtils.formatSettings.ShortDateFormat := 'dd/mm/yyyy';
+  if now > StrToDate('31/12/2026') then
+  begin
+    application.MessageBox
+      ('Aplicação expirada, solicitar nova versão para o time de PDV !',
+      'Atenção', MB_OK + MB_iconInformation);
+    application.Terminate;
+    abort;
+  end;
+
+  ParseTNS;
+  sResult := TStringList.Create;
+  sEmpresaPDVs := TStringList.Create;
+  sEmpresaPDVs.Clear;
+
+  // Carrega usuários lidos do Registrod o Windows do banco de dados :   sUsuarioConsinco /  sUsuarioConsincoMonitor;
+
+  // Desativado temporariamente, voltar
+  // ProcurarValorRegistro(HKEY_LOCAL_MACHINE, '', 'Db').Text;
+
+  // TabLogin.TabVisible := False;
+  // PGCPrincipal.ActivePage := TabLogin;
+  edtUsuario.SetFocus;
+  Principal.Caption := Principal.Caption + ' | Owner ERP : ' + sUsuarioConsinco
+    + ' | Owner Monitor : ' + sUsuarioConsincoMonitor;
+  edtUsuario.Text := sUsuarioConsincoMonitor;
+
+  // Remover daqui, NÃO ESQUECER, pois este usuario tem que vir da função ProcurarValorRegistro
+  sUsuarioConsinco := 'CONSINCO2';
+  // FreeAndNil(sQryOwnner)
+
+end;
+
 procedure TPrincipal.FormCreate(Sender: TObject);
 begin
   LstPrincipal.Style := lbOwnerDrawFixed;
@@ -98,39 +174,144 @@ begin
   sUnidade := EncontrarUnidadeAcrux + '\';
 end;
 
-procedure TPrincipal.GetProcessorCoreCount;
+{ procedure TPrincipal.GetProcessorCoreCount;
+  var
+  SysInfo: SYSTEM_INFO;
+  begin
+  GetSystemInfo(SysInfo);
+  AdicionarItem('Quantidade de núcleos : ' +
+  IntToStr(SysInfo.dwNumberOfProcessors), 'Seu processador possui ' +
+  IntToStr(SysInfo.dwNumberOfProcessors) +
+  ' núcleo(s) lógico(s) disponíveis para execução paralela.', clMoneyGreen);
+  // Result := SysInfo.dwNumberOfProcessors;
+  end;
+}
+
+function TPrincipal.GetLocalIP: string;
+var
+  WSAData: TWSAData;
+  HostName: array [0 .. 255] of AnsiChar;
+  HostEnt: PHostEnt;
+  Addr: PAnsiChar;
+begin
+  Result := '';
+  if WSAStartup(MakeWord(2, 2), WSAData) = 0 then
+  begin
+    try
+      if gethostname(HostName, SizeOf(HostName)) = 0 then
+      begin
+        HostEnt := gethostbyname(HostName);
+        if Assigned(HostEnt) then
+        begin
+          Addr := inet_ntoa(PInAddr(HostEnt^.h_addr_list^)^);
+          if Assigned(Addr) then
+            Result := string(Addr);
+        end;
+      end;
+    finally
+      WSACleanup;
+    end;
+  end;
+end;
+
+function TPrincipal.GetProcessorCoreCount: Integer;
 var
   SysInfo: SYSTEM_INFO;
 begin
   GetSystemInfo(SysInfo);
-  AdicionarItem('Quantidade de núcleos : ' +
-    IntToStr(SysInfo.dwNumberOfProcessors),
-    'Seu processador possui ' + IntToStr(SysInfo.dwNumberOfProcessors) +
-    ' núcleo(s) lógico(s) disponíveis para execução paralela.', clMoneyGreen);
-  // Result := SysInfo.dwNumberOfProcessors;
+  Result := SysInfo.dwNumberOfProcessors;
 end;
 
-procedure TPrincipal.GetProcessorName;
+function TPrincipal.GetProcessorName: string;
 var
   Reg: TRegistry;
 begin
-  // Result := 'Informação não disponível';
+  Result := 'Informação não disponível';
+
   Reg := TRegistry.Create;
   try
     Reg.RootKey := HKEY_LOCAL_MACHINE;
+
     if Reg.OpenKeyReadOnly('HARDWARE\DESCRIPTION\System\CentralProcessor\0')
     then
     begin
-      AdicionarItem('Nome do processador : ' +
-        Reg.ReadString('ProcessorNameString'),
-        'Modelo de CPU identificado no registro do Windows: ' +
-        Reg.ReadString('ProcessorNameString'), clMoneyGreen);
-      // Result := Reg.ReadString('ProcessorNameString');
+      if Reg.ValueExists('ProcessorNameString') then
+        Result := Reg.ReadString('ProcessorNameString');
+
       Reg.CloseKey;
     end;
   finally
     Reg.Free;
   end;
+end;
+
+{ procedure TPrincipal.GetProcessorName;
+  var
+  Reg: TRegistry;
+  begin
+  // Result := 'Informação não disponível';
+  Reg := TRegistry.Create;
+  try
+  Reg.RootKey := HKEY_LOCAL_MACHINE;
+  if Reg.OpenKeyReadOnly('HARDWARE\DESCRIPTION\System\CentralProcessor\0')
+  then
+  begin
+  AdicionarItem('Nome do processador : ' +
+  Reg.ReadString('ProcessorNameString'),
+  'Modelo de CPU identificado no registro do Windows: ' +
+  Reg.ReadString('ProcessorNameString'), clMoneyGreen);
+  // Result := Reg.ReadString('ProcessorNameString');
+  Reg.CloseKey;
+  end;
+  finally
+  Reg.Free;
+  end;
+  end;
+}
+
+function TPrincipal.GetTNSNamesPath: string;
+var
+  Reg: TRegistry;
+  SubKeyNames: TStringList;
+  Name: string;
+begin
+  Reg := TRegistry.Create;
+  Try
+    Reg.RootKey := HKEY_LOCAL_MACHINE;
+    Reg.OpenKeyReadOnly('SOFTWARE\ORACLE');
+    SubKeyNames := TStringList.Create;
+    Try
+      Reg.GetKeyNames(SubKeyNames);
+      for Name in SubKeyNames do
+        // oracle 10 save path to ORACLE_HOME in registry key like this
+        // HKEY_LOCAL_MACHINE\SOFTWARE\ORACLE\KEY_OraClient10g_home1\ORACLE_HOME
+        // for oracle 8 and 9 another key
+        if pos('KEY_', Name) = 1 then
+        begin
+          Reg.OpenKeyReadOnly(Name);
+          // for oracle 10 path to tnsnames.ora like this
+          // %ORACLE_HOME%\NETWORK\ADMIN\tnsnames.ora
+          // for oracle 8 and 9 another path
+          Result := Reg.ReadString('ORACLE_HOME') +
+            '\NETWORK\ADMIN\tnsnames.ora';
+        end;
+    Finally
+      SubKeyNames.Free;
+    End;
+  Finally
+    Reg.Free;
+  End;
+end;
+
+function TPrincipal.GetTotalMemory: Double;
+var
+  MemStatus: TMemoryStatusEx;
+begin
+  MemStatus.dwLength := SizeOf(TMemoryStatusEx);
+  if GlobalMemoryStatusEx(MemStatus) then
+    Result := MemStatus.ullTotalPhys / (1024 * 1024 * 1024)
+  else
+    Result := -1;
 end;
 
 procedure TPrincipal.LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
@@ -181,37 +362,149 @@ begin
 end;
 
 procedure TPrincipal.SpeedButton1Click(Sender: TObject);
+Var
+  sQry: TFDQuery;
+  sListaMensagens: TStringList;
+  nPortaServidor: Integer;
+
 begin
-  LimparItensLista;
-  MemoResult.Clear;
+  try
+    nPortaServidor := 0;
+    sListaMensagens := TStringList.Create;
+    sListaMensagens.Clear;
 
-  AdicionarItem('Espao livre em disco : ' + EspacoEmDiscoLivre(),
-    'Espaço livre disponível na unidade monitorada: ' + EspacoEmDiscoLivre(),
-    clMoneyGreen);
-  LimparItensLista;
+    sQry := TFDQuery.Create(Nil);
+    sQry.Connection := dm.fdc;
+    sQry.SQL.Clear;
 
-  VerificaEstrutura;
+    LimparItensLista;
+    MemoResult.Clear;
 
-  // AdicionarItem(' ', clGray);
-  AdicionarItem('Informações do processador ',
-    'Clique nas linhas abaixo para visualizar detalhes personalizados do processador.',
-    clGray);
-  GetProcessorName;
-  GetProcessorCoreCount;
-  AdicionarItem('Espaço livre em disco : ' + EspacoEmDiscoLivre(),
-    'Resumo de capacidade livre identificado na análise atual do ambiente.',
-    clGray);
+    LimparItensLista;
+    VerificaEstrutura;
+
+    AdicionarItem('Informações do hardware do servidor ',
+      'Clique nas linhas abaixo para visualizar detalhes personalizados do processador.',
+      clGray);
+
+    AdicionarItem('Informações do processador : ' + GetProcessorName,
+      'Dentro dos pre requisitos', clMoneyGreen);
+
+    AdicionarItem('Quantidade núcleos processador : ' +
+      IntToStr(GetProcessorCoreCount), 'Quantidade de Nucleos ', clMoneyGreen);
+
+    AdicionarItem('Informações Memória RAM : ' + FormatFloat('0.00',
+      GetTotalMemory) + ' GB', 'Dentro dos pre requisitos', clMoneyGreen);
+
+    AdicionarItem('Espaço livre em disco : ' + IntToStr(EspacoEmDiscoLivre()) +
+      ' GB', 'Resumo de capacidade livre identificado na análise atual do ambiente.',
+      clMoneyGreen);
+
+    AdicionarItem('Informações de ambiente do servidor : ', '', clGray);
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select nvl(to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''ServidorLocal'',''Port'')),7011) PortaServidor from dual');
+    showmessage(sQry.SQL.Text);
+    sQry.open;
+
+    // Verificar porta do servidor
+    if sQry.FieldByName('PortaServidor').AsInteger <> 7011 then
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Porta de comunicação do serviço do servidor de PDVS está configurada como : '
+        + sQry.FieldByName('PortaServidor').AsString +
+        ', que é diferente do padrão 7011, isto poderá causar problemas de comunicação com os PDVs , configure a porta do serviço nas configurações de "Servidor Local" do servidor de PDVs, para 7011 ',
+        clMoneyGreen);
+    end;
+    nPortaServidor := sQry.FieldByName('PortaServidor').AsInteger;
+
+    // Verificar IP do servidor.
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''ServidorLocal'',''IP'')) IPServidor from dual');
+    sQry.open;
+    if Trim(sQry.FieldByName('IPServidor').AsString) <> '' then
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Existe endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, ('
+        + Trim(sQry.FieldByName('IPServidor').AsString) +
+        ') isto faz com que o serviço se baseie neste I.P. configurado para inicialização, e não no I.P. da máquina local. ',
+        clMoneyGreen);
+
+      if Trim(sQry.FieldByName('IPServidor').AsString) <> Trim(GetLocalIP) then
+      begin
+        AdicionarItem('Porta comunicação servidor :',
+          'O endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, está DIFERENTE do I.P. da máquina do servidor, isto causará problemas na inicialização do serviço do servidor de PDVs.'
+          + 'I.P. Configurado : ' + Trim(sQry.FieldByName('IPServidor')
+          .AsString) + ' - I.P. da máquina do servidor : ' + Trim(GetLocalIP) +
+          'Exclua o I.P. configurado das configurações de "Servidor Local" do servidor de PDVs, para que a aplicação considere o I.P. da máquina local, ou então configure o I.P. corretamente para evitar problemas na comunicação com os PDVs',
+          clMoneyGreen);
+
+        // Testa com o I.P. Configurado no servidor.
+        AdicionarItem('Porta comunicação servidor : ',
+          'O teste de conectividade com o serviço será executado, utilizando o I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs : '
+          + Trim(sQry.FieldByName('IPServidor').AsString) + ' Porta : ',
+          clMoneyGreen);
+        // IntToStr(nPortaServidor));
+
+        AdicionarItem('Porta comunicação servidor : ',
+          TestaConexao(Trim(sQry.FieldByName('IPServidor').AsString),
+          nPortaServidor), clMoneyGreen);
+      end;
+    end
+    else
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Verificando conectividade local do servidor de PDVs (Telnet) com o I.P da máquina local -> '
+        + Trim(GetLocalIP) + ' Porta : ' + IntToStr(nPortaServidor),
+        clMoneyGreen);
+      // redt1.Lines.Add(TestaConexao(Trim(GetLocalIP), nPortaServidor),clMoneyGreen););
+    end;
+
+  finally
+    FreeAndNil(sQry);
+    FreeAndNil(sListaMensagens);
+  end;
+
 end;
 
 procedure TPrincipal.SpeedButton6Click(Sender: TObject);
 begin
   AdicionarItem('Venda Concluída', 'Pedido #1042 finalizado com sucesso.',
     clMoneyGreen);
-  AdicionarItem('Erro no Sistema', 'Falha de integração com o serviço fiscal.',
-    clRed);
+  AdicionarItem('Erro no Sistema',
+    'Falha de integração com o serviço fiscal.', clRed);
   AdicionarItem('Em Andamento', 'Processamento do lote 07 ainda em execução.',
     clYellow);
   AdicionarItem('Finalizado', 'Rotina encerrada e recursos liberados.', clAqua);
+end;
+
+function TPrincipal.TestaConexao(sIP: string; nPorta: Integer): string;
+begin
+  // try
+  Result := 'Sucesso na conexão telnet';
+  try
+    // Colocar combo box para digitar a porta
+    IdTCPClient1.Port := nPorta;
+    IdTCPClient1.Host := sIP;
+    IdTCPClient1.Connect;
+    // RdtConectividade.Lines.Add('Conexão telnet realizada com sucesso ! ');
+    // IdTCPClient1.IOHandler.WriteLn('teste'); // Envia mensagem
+    // Response := IdTCPClient1.IOHandler.ReadLn; // Lê resposta do servidor
+    // RdtConectividade.Lines.Add('Resposta do servidor: ' + Response);
+    IdTCPClient1.Disconnect;
+  except
+    on E: Exception do
+    begin
+      Result := 'Falha ao conectar telnet ' + E.Message;
+      { if PGCPrincipal.ActivePage = tabPrincipal then
+        redt1.SelAttributes.Color := clRed
+        else if PGCPUtil.ActivePage = TabAnalise then
+        RdtConectividade.SelAttributes.Color := clRed;
+      }
+    end;
+  end;
 end;
 
 function TPrincipal.VerificaEstrutura: Boolean;
@@ -454,12 +747,12 @@ begin
 
   Finally
     if (sListaArquivos.Count > 0) or (sListaDiretorio.Count > 0) then
-      AdicionarItem('Verificando estrutura de arquivos / diretórios', clRed)
+      // AdicionarItem('Verificando estrutura de arquivos / diretórios', clRed)
     else
-      AdicionarItem('Verificando estrutura de arquivos / diretórios',
-        clMoneyGreen);
+      // AdicionarItem('Verificando estrutura de arquivos / diretórios',
+      // clMoneyGreen);
 
-    FreeAndNil(sListaDiretorio);
+      FreeAndNil(sListaDiretorio);
     FreeAndNil(sListaArquivos);
   End;
 end;
@@ -490,14 +783,172 @@ end;
 
 function TPrincipal.EspacoEmDiscoLivre: Int64;
 var
-  S: Int64;
   AmtFree: Int64;
-  Total: Int64;
 begin
   AmtFree := DiskFree(0);
-  Total := DiskSize(0);
-  S := (AmtFree div 1024) div 1024;
-  Result := S;
+  Result := ((AmtFree div 1024) div 1024) div 1024; // GB
+end;
+
+procedure TPrincipal.ParseTNS;
+var
+  slTemp: TStringList;
+  sPath, sTemp: string;
+  i: Integer;
+begin
+  // https://stackoverflow.com/questions/7039492/how-i-can-parse-a-tnsnames-ora-file-from-delphi
+  slTemp := TStringList.Create;
+  slTNSConfig := TStringList.Create;
+  try
+    sPath := GetTNSNamesPath;
+    if (Length(sPath) < 33) or (not FileExists(sPath)) then
+      messageDlg('tnsnames.ora not found.', mtError, [mbOk], 0)
+    else
+    begin
+      slTemp.LoadFromFile(sPath); // Load tnsnames.ora
+      sTemp := StringReplace(StringReplace(UpperCase(slTemp.Text), ' ', '',
+        [rfReplaceAll]), ')', '', [rfReplaceAll]);
+      // delete ')' and spaces
+      slTemp.Clear;
+      slTemp.Delimiter := '(';
+      slTemp.DelimitedText := sTemp;
+      // parse like  Name=Value
+      sTemp := '';
+      for i := 0 to slTemp.Count - 1 do
+      begin
+        if pos('DESCRIPTION', slTemp[i]) = 1 then
+        // Get Name before description
+        begin
+          sTemp := StringReplace(slTemp[i - 1], '=', '', [rfReplaceAll]);
+          cbxDataBase.Items.Add(sTemp); // Fill combobox
+        end;
+        if Length(slTemp.ValueFromIndex[i]) > 0 then
+          // Get filled Name=Value
+          slTNSConfig.Add(sTemp + '_' + slTemp[i]);
+        // Fill TNS config like TNS_HOST=Value
+      end;
+      cbxDataBase.Sorted := true;
+    end;
+  finally
+    slTemp.Free;
+  end;
+end;
+
+function TPrincipal.ProcurarValorRegistro(RootKey: HKEY;
+  ChaveAtual, ValorProcurado: string): TStringList;
+var
+  Reg: TRegistry;
+  SubKeys: TStringList;
+  i, r: Integer;
+begin
+  Reg := TRegistry.Create(KEY_READ);
+  SubKeys := TStringList.Create;
+  // sResult.Clear;
+  try
+    Reg.RootKey := RootKey;
+
+    if Reg.OpenKeyReadOnly(ChaveAtual) then
+    begin
+      // Verifica se o valor existe nesta chave
+      if Reg.ValueExists(ValorProcurado) then
+      begin
+        if Trim(ChaveAtual) <> '' then
+        begin
+          r := pos(UpperCase('CONSINCO'), UpperCase(ChaveAtual));
+          if r <> 0 then
+            if Trim(sUsuarioConsinco) = '' then
+              sUsuarioConsinco := LowerCase(Reg.ReadString('User'));
+
+          r := pos(UpperCase('CONSINCOMONITOR'), UpperCase(ChaveAtual));
+          if r <> 0 then
+            if Trim(sUsuarioConsincoMonitor) = '' then
+              sUsuarioConsincoMonitor := LowerCase(Reg.ReadString('User'));
+
+        end;
+      end;
+
+      // Lista subchaves e percorre
+
+      if (Trim(sUsuarioConsinco) = '') or (Trim(sUsuarioConsincoMonitor) = '')
+      then
+      begin
+        Reg.GetKeyNames(SubKeys);
+        for i := 0 to SubKeys.Count - 1 do
+        begin
+          // Ignora chaves do sistema
+          if (SubKeys[i] <> '.') and (SubKeys[i] <> '..') then
+          begin
+            ProcurarValorRegistro(RootKey, ChaveAtual + '\' + SubKeys[i],
+              ValorProcurado);
+            // showmessage('aaa');
+          end;
+        end;
+        Reg.CloseKey;
+      end;
+    end;
+  finally
+    Reg.Free;
+    SubKeys.Free;
+    Result := sResult;
+    // FreeAndNil(sResult);
+  end;
+end;
+
+procedure TPrincipal.AtivaPage(APageControl: TPageControl; APage: TTabSheet);
+var
+  i: Integer;
+begin
+  for i := 0 to APageControl.PageCount - 1 do
+    APageControl.Pages[i].TabVisible := False;
+
+  if Assigned(APage) then
+  begin
+    APage.TabVisible := true;
+    APageControl.ActivePage := APage;
+  end;
+end;
+
+procedure TPrincipal.btnConectarClick(Sender: TObject);
+begin
+  try
+    try
+      if Trim(cbxDataBase.Text) = '' then
+      begin
+        application.MessageBox(PChar('Escolha o banco de dados '), 'Atenção',
+          MB_OK + MB_ICONERROR);
+        abort;
+      end;
+      dm.fdc.Params.Database := Trim(cbxDataBase.Text);
+      dm.fdc.Params.UserName := Trim(edtUsuario.Text);
+      dm.fdc.Params.Password := Trim(edtSenha.Text);
+      if (Trim(edtUsuario.Text) <> '') and (Trim(edtSenha.Text) <> '') then
+        dm.fdc.Connected := true
+      else
+      begin
+        application.MessageBox(PChar('Digite o usuário e senha !'), 'Atenção',
+          MB_OK + MB_ICONERROR);
+        abort;
+      end;
+
+      // Caso não seja possivel identificar o usuario do banco, assume CONSINCO / e o que for digitado no text box do usuario
+      // Remover
+      if Trim(sUsuarioConsincoMonitor) = '' then
+        sUsuarioConsincoMonitor := Trim(edtUsuario.Text);
+
+      if Trim(sUsuarioConsinco) = '' then
+        sUsuarioConsinco := 'CONSINCO2';
+
+      pnLateral.Enabled := true;
+      AtivaPage(pgPrincipal, TabAnalise);
+    except
+      on E: Exception do
+      begin
+        application.MessageBox(PChar('Erro ao conectar banco de dados : ' +
+          E.Message), 'Atenção', MB_OK + MB_ICONERROR);
+        abort;
+      end;
+    end;
+  finally
+  end;
 end;
 
 end.
