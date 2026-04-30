@@ -146,7 +146,7 @@ begin
   AdicionarItem('Informações do processador ', clGray);
   GetProcessorName;
   GetProcessorCoreCount;
-  // dicionarItem('Informações do HD : ' + EspacoEmDiscoLivre(), clGray);
+  AdicionarItem('Espaço livre em disco : ' + EspacoEmDiscoLivre(), clGray);
 end;
 
 procedure TPrincipal.SpeedButton6Click(Sender: TObject);
