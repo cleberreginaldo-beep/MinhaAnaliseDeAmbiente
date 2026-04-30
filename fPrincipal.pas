@@ -35,6 +35,8 @@ type
     procedure GetProcessorName;
     procedure GetProcessorCoreCount;
     procedure SpeedButton1Click(Sender: TObject);
+    procedure LstPrincipalClick(Sender: TObject);
+    procedure LimparItensLista;
 
   private
     { Private declarations }
@@ -45,6 +47,7 @@ type
 type
   TCorItem = class
     Cor: TColor;
+    Detalhes: string;
   end;
 
 var
@@ -61,14 +64,26 @@ var
 begin
   Obj := TCorItem.Create;
   Obj.Cor := CorLinha;
+  Obj.Detalhes := Texto;
 
   LstPrincipal.Items.AddObject(Texto, Obj);
+end;
+
+procedure TPrincipal.LimparItensLista;
+var
+  i: Integer;
+begin
+  for i := 0 to LstPrincipal.Items.Count - 1 do
+    LstPrincipal.Items.Objects[i].Free;
+
+  LstPrincipal.Clear;
 end;
 
 procedure TPrincipal.FormCreate(Sender: TObject);
 begin
   LstPrincipal.Style := lbOwnerDrawFixed;
   LstPrincipal.ItemHeight := 20;
+  LstPrincipal.OnClick := LstPrincipalClick;
   LstPrincipal.Clear;
   MemoResult.Clear;
 
@@ -80,7 +95,7 @@ var
   SysInfo: SYSTEM_INFO;
 begin
   GetSystemInfo(SysInfo);
-  AdicionarItem('Quantidade de núcleos : ' +
+  AdicionarItem('Quantidade de nÃºcleos : ' +
     IntToStr(SysInfo.dwNumberOfProcessors), clMoneyGreen);
   // Result := SysInfo.dwNumberOfProcessors;
 end;
@@ -89,7 +104,7 @@ procedure TPrincipal.GetProcessorName;
 var
   Reg: TRegistry;
 begin
-  // Result := 'Informação não disponível';
+  // Result := 'InformaÃ§Ã£o nÃ£o disponÃ­vel';
   Reg := TRegistry.Create;
   try
     Reg.RootKey := HKEY_LOCAL_MACHINE;
@@ -134,24 +149,41 @@ begin
   end;
 end;
 
-procedure TPrincipal.SpeedButton1Click(Sender: TObject);
+procedure TPrincipal.LstPrincipalClick(Sender: TObject);
+var
+  Obj: TCorItem;
 begin
-  LstPrincipal.Clear;
   MemoResult.Clear;
 
-  AdicionarItem('Informações de estrutra de diretórios / arquivos ', clGray);
+  if LstPrincipal.ItemIndex < 0 then
+    Exit;
+
+  Obj := TCorItem(LstPrincipal.Items.Objects[LstPrincipal.ItemIndex]);
+  if Assigned(Obj) then
+    MemoResult.Lines.Add(Obj.Detalhes);
+end;
+
+procedure TPrincipal.SpeedButton1Click(Sender: TObject);
+begin
+  LimparItensLista;
+  MemoResult.Clear;
+
+  AdicionarItem('Espao livre em disco : ' + EspacoEmDiscoLivre(),
+    clMoneyGreen);
+  LimparItensLista;
+
   VerificaEstrutura;
 
   // AdicionarItem(' ', clGray);
-  AdicionarItem('Informações do processador ', clGray);
+  AdicionarItem('InformaÃ§Ãµes do processador ', clGray);
   GetProcessorName;
   GetProcessorCoreCount;
-  AdicionarItem('Espaço livre em disco : ' + EspacoEmDiscoLivre(), clGray);
+  AdicionarItem('EspaÃ§o livre em disco : ' + EspacoEmDiscoLivre(), clGray);
 end;
 
 procedure TPrincipal.SpeedButton6Click(Sender: TObject);
 begin
-  AdicionarItem('Venda Concluída', clMoneyGreen);
+  AdicionarItem('Venda ConcluÃ­da', clMoneyGreen);
   AdicionarItem('Erro no Sistema', clRed);
   AdicionarItem('Em Andamento', clYellow);
   AdicionarItem('Finalizado', clAqua);
@@ -384,22 +416,22 @@ begin
     for i := 0 to sListaDiretorio.Count - 1 do
       if not DirectoryExists(sListaDiretorio[i]) then
       begin
-        MemoResult.Lines.Add('Diretório não encontrado : ' +
+        MemoResult.Lines.Add('DiretÃ³rio nÃ£o encontrado : ' +
           sListaDiretorio[i]);
       end;
 
     for x := 0 to sListaArquivos.Count - 1 do
       if not FileExists(sListaArquivos[x]) then
       begin
-        MemoResult.Lines.Add('Diretório não encontrado : ' +
+        MemoResult.Lines.Add('DiretÃ³rio nÃ£o encontrado : ' +
           sListaDiretorio[x]);
       end;
 
   Finally
     if (sListaArquivos.Count > 0) or (sListaDiretorio.Count > 0) then
-      AdicionarItem('Verificando estrutura de arquivos / diretórios', clRed)
+      AdicionarItem('Verificando estrutura de arquivos / diretÃ³rios', clRed)
     else
-      AdicionarItem('Verificando estrutura de arquivos / diretórios',
+      AdicionarItem('Verificando estrutura de arquivos / diretÃ³rios',
         clMoneyGreen);
 
     FreeAndNil(sListaDiretorio);
@@ -412,7 +444,7 @@ var
   Drive: Char;
   Caminho: string;
 begin
-  Result := 'não encontrado';
+  Result := 'nÃ£o encontrado';
 
   for Drive := 'A' to 'Z' do
   begin
