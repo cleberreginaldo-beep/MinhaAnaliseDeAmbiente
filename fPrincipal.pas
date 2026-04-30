@@ -104,7 +104,9 @@ var
 begin
   GetSystemInfo(SysInfo);
   AdicionarItem('Quantidade de núcleos : ' +
-    IntToStr(SysInfo.dwNumberOfProcessors), clMoneyGreen);
+    IntToStr(SysInfo.dwNumberOfProcessors),
+    'Seu processador possui ' + IntToStr(SysInfo.dwNumberOfProcessors) +
+    ' núcleo(s) lógico(s) disponíveis para execução paralela.', clMoneyGreen);
   // Result := SysInfo.dwNumberOfProcessors;
 end;
 
@@ -120,6 +122,8 @@ begin
     then
     begin
       AdicionarItem('Nome do processador : ' +
+        Reg.ReadString('ProcessorNameString'),
+        'Modelo de CPU identificado no registro do Windows: ' +
         Reg.ReadString('ProcessorNameString'), clMoneyGreen);
       // Result := Reg.ReadString('ProcessorNameString');
       Reg.CloseKey;
@@ -160,15 +164,20 @@ end;
 procedure TPrincipal.LstPrincipalClick(Sender: TObject);
 var
   Obj: TCorItem;
+  TextoSelecionado: string;
 begin
   MemoResult.Clear;
 
   if LstPrincipal.ItemIndex < 0 then
     Exit;
 
+  TextoSelecionado := LstPrincipal.Items[LstPrincipal.ItemIndex];
   Obj := TCorItem(LstPrincipal.Items.Objects[LstPrincipal.ItemIndex]);
-  if Assigned(Obj) then
-    MemoResult.Lines.Add(Obj.Detalhes);
+
+  if Assigned(Obj) and (Trim(Obj.Detalhes) <> '') then
+    MemoResult.Lines.Add(Obj.Detalhes)
+  else
+    MemoResult.Lines.Add('Detalhes da linha selecionada: ' + TextoSelecionado);
 end;
 
 procedure TPrincipal.SpeedButton1Click(Sender: TObject);
@@ -177,16 +186,21 @@ begin
   MemoResult.Clear;
 
   AdicionarItem('Espao livre em disco : ' + EspacoEmDiscoLivre(),
+    'Espaço livre disponível na unidade monitorada: ' + EspacoEmDiscoLivre(),
     clMoneyGreen);
   LimparItensLista;
 
   VerificaEstrutura;
 
   // AdicionarItem(' ', clGray);
-  AdicionarItem('Informações do processador ', clGray);
+  AdicionarItem('Informações do processador ',
+    'Clique nas linhas abaixo para visualizar detalhes personalizados do processador.',
+    clGray);
   GetProcessorName;
   GetProcessorCoreCount;
-  AdicionarItem('Espaço livre em disco : ' + EspacoEmDiscoLivre(), clGray);
+  AdicionarItem('Espaço livre em disco : ' + EspacoEmDiscoLivre(),
+    'Resumo de capacidade livre identificado na análise atual do ambiente.',
+    clGray);
 end;
 
 procedure TPrincipal.SpeedButton6Click(Sender: TObject);
