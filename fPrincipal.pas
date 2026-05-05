@@ -13,7 +13,8 @@ uses
   FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.Oracle,
   FireDAC.Phys.OracleDef, FireDAC.VCLUI.Wait, FireDAC.Stan.Param, FireDAC.DatS,
   FireDAC.DApt.Intf, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet,
-  Winapi.WinSock, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient;
+  Winapi.WinSock, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient,
+  System.JSON;
 
 type
   TPrincipal = class(TForm)
@@ -47,7 +48,6 @@ type
     procedure FormCreate(Sender: TObject);
     procedure LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
-    procedure SpeedButton6Click(Sender: TObject);
     function VerificaEstrutura: Boolean;
     function EncontrarUnidadeAcrux: string;
     function EspacoEmDiscoLivre(): Int64;
@@ -65,6 +65,7 @@ type
     function GetParametroMonitor(pGrupo, pParam: String): String;
     function CorParametro(Valor: String): TColor;
     function TamanhoDiretorio(Dir: string): Integer;
+    function VerificarLinkSpeed: Boolean;
 
     procedure SpeedButton1Click(Sender: TObject);
     procedure LstPrincipalClick(Sender: TObject);
@@ -402,6 +403,8 @@ Var
   sListaMensagens: TStringList;
   nPortaServidor, nTamanhoInput, nTamanhoOutput, a, nContErro: Integer;
   Retorno: String;
+  TempoInicial: TDateTime;
+
 begin
   try
     a := 0;
@@ -410,6 +413,8 @@ begin
     nTamanhoInput := 0;
     nTamanhoOutput := 0;
     nContErro := 0;
+    TempoInicial := Time();
+
     sListaMensagens := TStringList.Create;
     sListaMensagens.Clear;
 
@@ -1322,7 +1327,6 @@ begin
     end;
 
     // Melhoria
-    pb1.Position := pb1.Position + 1;
     sQry.SQL.Clear;
     sQry.SQL.Add
       ('SELECT lower(VALUE) VALOR FROM v$parameter WHERE lower(NAME) = ''result_cache_mode''');
@@ -1374,59 +1378,108 @@ begin
     end;
 
     // Melhoria
-    pb1.Position := pb1.Position + 1;
     sQry.SQL.Clear;
     sQry.SQL.Add
       ('SELECT VALUE VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_index_caching''');
     sQry.open;
-    redt1.SelAttributes.Style := [fsBold];
-    redt1.Lines.Add
-      ('Comportamento do custo de otimização de junções de loops aninhados e iteradores IN-list (optimizer_index_caching)');
-    redt1.Lines.Add(sQry.FieldByName('valor').AsString);
-    if sQry.FieldByName('valor').AsInteger < 90 then
+    if sQry.RecordCount > 0 then
     begin
-      redt1.SelAttributes.Color := clRed;
-      redt1.Lines.Add
-        ('Parametro "optimizer_index_caching" do banco de dados, menor que 90, que é o padrão recomendado pela TOTVs');
-      redt1.SelAttributes.Color := clRed;
-      redt1.Lines.Add
-        ('Poderá impactar em performance do banco, solicitar para cliente verificar com seu DBA');
-      redt1.SelAttributes.Color := clRed;
-      redt1.Lines.Add
-        ('Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados');
+      AdicionarItem
+        ('Comportamento do custo de otimização de junções de loops aninhados e iteradores IN-list (optimizer_index_caching)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if sQry.FieldByName('valor').AsInteger < 2000 then
+      begin
+        AdicionarItem('optimizer_index_caching',
+          'Parametro "optimizer_index_caching" do banco de dados, menor que 90, que é o padrão recomendado pela TOTVs, Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
+          clRed);
+      end;
     end;
-    redt1.Lines.Add('  ');
 
-    // Melhoria
-    // Verifica se tabelas temporarias tem estatisticas coletadas.
-    redt1.SelAttributes.Style := [fsBold];
-    redt1.Lines.Add('Verificando coleta de estatiscas em tabelas temporarias ');
-    pb1.Position := pb1.Position + 1;
+    AdicionarItem('Verificando coleta de estatiscas em tabelas temporarias ',
+      sQry.FieldByName('valor').AsString, clMoneyGreen);
+
     sQry.SQL.Clear;
     sQry.SQL.Add
       ('Select a.TABLE_NAME tabela,a.tablespace_name,a.LAST_ANALYZED UltAnalise From User_Tables a Where a.Temporary = ''Y'' and a.TABLE_NAME like ''TB%'' And a.Last_Analyzed Is Not Null order by 1');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
-      redt1.SelAttributes.Style := [fsBold];
-      redt1.Lines.Add('Tabela       | ' + ' TableSpace     | Data de análise ');
       while not sQry.Eof do
       begin
-        redt1.SelAttributes.Color := clRed;
-        redt1.Lines.Add(sQry.FieldByName('tabela').AsString + ' | ' +
+        sListaMensagens.Add(sQry.FieldByName('tabela').AsString + ' | ' +
           sQry.FieldByName('tablespace_name').AsString + ' | ' +
           sQry.FieldByName('UltAnalise').AsString);
         sQry.Next;
       end;
-      redt1.Lines.Add('  ');
-      redt1.SelAttributes.Color := clRed;
-      redt1.Lines.Add
-        ('Existe(m) tabelas temporarias com estatiscas coletadas, deverá ser solicitado ao DBA do cliente para remover a coleta de estatisca destas tabelas ');
-    end
+    end;
+    if Trim(sListaMensagens.Text) <> '' then
+      // redt1.Lines.Add('Tabela       | ' + ' TableSpace     | Data de análise ');
+      AdicionarItem
+        ('Existe(m) tabelas temporarias com estatiscas coletadas, deverá ser solicitado ao DBA do cliente para remover a coleta de estatisca destas tabelas  : ',
+        sListaMensagens.Text, clMoneyGreen)
     else
-      redt1.Lines.Add('Nenhuma tabela com estatisca coletada encontrada ');
+      AdicionarItem('Nenhuma tabela com estatisca coletada encontrada ',
+        'Nenhuma tabela com estatisca coletada encontrada', clMoneyGreen);
 
-    asdfa
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.OBJECT_NAME Objeto,a.status,count(1) over() qtde from dba_objects a where lower(status) != ''valid'' and lower(OWNER) in ('
+      + QuotedStr(sUsuarioConsinco) + ')');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add(sQry.FieldByName('Objeto').AsString + ' | ' +
+          sQry.FieldByName('status').AsString);
+        sQry.Next;
+      end;
+    end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Verificando objetos inválidos usuário : ',
+        sListaMensagens.Text, clRed)
+    else
+      AdicionarItem('Nenhum objeto invalido ', 'Nenhum objeto invalido',
+        clMoneyGreen);
+
+    // pb1.Position := pb1.Position + 1;
+    // redt1.SelAttributes.Style := [fsBold];
+    // redt1.Lines.Add('Verificando informações TABLESPACE ');
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.tablespace_name,Round(USED_PERCENT, 2) PercUso from DBA_TABLESPACE_USAGE_METRICS a order by 2');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add(Trim(sQry.FieldByName('tablespace_name').AsString) +
+          ' | ' + Trim(sQry.FieldByName('PercUso').AsString) + ' %');
+        sQry.Next;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Verificando informações TABLESPACE : ',
+        sListaMensagens.Text, clRed)
+    else
+      AdicionarItem('Verificando informações TABLESPACE',
+        'Verificando informações TABLESPACE', clMoneyGreen);
+
+    // redt1.Lines.Add('Verificando informações de rede');
+    if not VerificarLinkSpeed then
+      AdicionarItem
+        ('Atenção: Interface de rede não está em 1 Gbps, isso poderá causar instabiliades no servidor, ajustar para 1 Gbps !',
+        'Atenção: Interface de rede não está em 1 Gbps, isso poderá causar instabiliades no servidor, ajustar para 1 Gbps !',
+        clMoneyGreen)
+    else
+      AdicionarItem('Atenção: Interface de rede em 1 Gbps, OK!',
+        'Atenção: Interface de rede em 1 Gbps, OK!', clMoneyGreen);
+
+    AdicionarItem('Análises que também devem ser realizadas ',
+      'Configurar o serviço do servidor de PDVs para logar como Adminstrador local da máquina /  Avaliar o log de eventos do Windows / Link de documentação do checklist PDV : https://tdn.totvs.com/pages/viewpage.action?pageId=904036675',
+      clMoneyGreen);
+
+    AdicionarItem(' Total análises : ',
+      'analises realizadas(99) , Tempo total :' +
+      TimeToStr(Time() - TempoInicial) + ' segundos', clMoneyGreen);
 
   finally
     FreeAndNil(sQry1);
@@ -1434,17 +1487,6 @@ begin
     FreeAndNil(sListaMensagens);
   end;
 
-end;
-
-procedure TPrincipal.SpeedButton6Click(Sender: TObject);
-begin
-  AdicionarItem('Venda Concluída', 'Pedido #1042 finalizado com sucesso.',
-    clMoneyGreen);
-  AdicionarItem('Erro no Sistema',
-    'Falha de integração com o serviço fiscal.', clRed);
-  AdicionarItem('Em Andamento', 'Processamento do lote 07 ainda em execução.',
-    clYellow);
-  AdicionarItem('Finalizado', 'Rotina encerrada e recursos liberados.', clAqua);
 end;
 
 function TPrincipal.TamanhoDiretorio(Dir: string): Integer;
@@ -1828,6 +1870,140 @@ begin
   End;
 end;
 
+function TPrincipal.VerificarLinkSpeed: Boolean;
+var
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  SA: TSecurityAttributes;
+  hRead, hWrite: THandle;
+  Buffer: array [0 .. 4095] of AnsiChar;
+  BytesRead: DWORD;
+  Output: TStringStream;
+  Cmd: string;
+  JsonValue: TJSONValue;
+  JsonArray: TJSONArray;
+  JsonObj: TJSONObject;
+  i: Integer;
+  Status, LinkSpeed: string;
+  CmdLine: string;
+  ExitCode: DWORD;
+  Retorno: string;
+begin
+  Result := true;
+  // Default seguro (ajuste conforme regra de negócio)
+
+  Cmd := 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' +
+    '"if (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue) {' +
+    ' Get-NetAdapter | Select Name, Status, LinkSpeed | ConvertTo-Json -Compress'
+    + '} else { Write-Output ''NO_CMDLET'' }"';
+
+  Output := TStringStream.Create('', TEncoding.UTF8);
+
+  { redt1.Lines.Add
+    ('Comanndo executado via console POWERSHELL para verificar velocidade placa de rede');
+    redt1.Lines.Add(Cmd);
+  }
+  try
+    // Segurança
+    SA.nLength := SizeOf(SA);
+    SA.bInheritHandle := true;
+    SA.lpSecurityDescriptor := nil;
+
+    CreatePipe(hRead, hWrite, @SA, 0);
+
+    ZeroMemory(@SI, SizeOf(SI));
+    SI.cb := SizeOf(SI);
+    SI.hStdOutput := hWrite;
+    SI.hStdError := hWrite;
+    SI.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+    SI.wShowWindow := SW_HIDE;
+
+    CmdLine := Cmd;
+    UniqueString(CmdLine);
+
+    if not CreateProcess(nil, Pchar(CmdLine), nil, nil, true, 0, nil, nil,
+      SI, PI) then
+      RaiseLastOSError;
+
+    CloseHandle(hWrite);
+
+    // Leitura da saída
+    while ReadFile(hRead, Buffer, SizeOf(Buffer), BytesRead, nil) do
+    begin
+      if BytesRead = 0 then
+        break;
+      Output.Write(Buffer, BytesRead);
+    end;
+
+    CloseHandle(hRead);
+
+    WaitForSingleObject(PI.hProcess, INFINITE);
+
+    // 🔹 Verifica código de saída
+    GetExitCodeProcess(PI.hProcess, ExitCode);
+
+    CloseHandle(PI.hProcess);
+    CloseHandle(PI.hThread);
+
+    Retorno := Trim(Output.DataString);
+
+    // 🚫 Se deu erro ou não tem cmdlet
+    if (ExitCode <> 0) or (Retorno = '') or (pos('NO_CMDLET', Retorno) > 0) or
+      (pos('CommandNotFoundException', Retorno) > 0) or
+      (pos('não é reconhecido', LowerCase(Retorno)) > 0) then
+    begin
+      // Aqui você decide: ignora ou marca como inválido
+      Exit;
+    end;
+
+    // 🚫 Se não for JSON válido
+    if not(Retorno.StartsWith('{') or Retorno.StartsWith('[')) then
+      Exit;
+
+    // 🔹 Parse JSON
+    JsonValue := TJSONObject.ParseJSONValue(Retorno);
+    try
+      if not Assigned(JsonValue) then
+        Exit;
+
+      if JsonValue is TJSONObject then
+      begin
+        JsonObj := JsonValue as TJSONObject;
+
+        Status := JsonObj.GetValue<string>('Status');
+        LinkSpeed := JsonObj.GetValue<string>('LinkSpeed');
+
+        if (Status = 'Up') and (pos('1 Gbps', LinkSpeed) = 0) then
+          Result := False;
+      end
+      else if JsonValue is TJSONArray then
+      begin
+        JsonArray := JsonValue as TJSONArray;
+
+        for i := 0 to JsonArray.Count - 1 do
+        begin
+          JsonObj := JsonArray.Items[i] as TJSONObject;
+
+          Status := JsonObj.GetValue<string>('Status');
+          LinkSpeed := JsonObj.GetValue<string>('LinkSpeed');
+
+          if (Status = 'Up') and (pos('1 Gbps', LinkSpeed) = 0) then
+          begin
+            Result := False;
+            break;
+          end;
+        end;
+      end;
+
+    finally
+      JsonValue.Free;
+    end;
+
+  finally
+    Output.Free;
+  end;
+end;
+
 function TPrincipal.EncontrarUnidadeAcrux: string;
 var
   Drive: char;
@@ -1838,7 +2014,7 @@ begin
   for Drive := 'A' to 'Z' do
   begin
     // Verifica se a unidade existe
-    if GetDriveType(PChar(Drive + ':\')) <> DRIVE_NO_ROOT_DIR then
+    if GetDriveType(Pchar(Drive + ':\')) <> DRIVE_NO_ROOT_DIR then
     begin
       Caminho := Drive +
         ':\C5Client\AcruxMonitor\Services\Acruxmonitorservice.exe';
@@ -1984,7 +2160,7 @@ begin
     try
       if Trim(cbxDataBase.Text) = '' then
       begin
-        application.MessageBox(PChar('Escolha o banco de dados '), 'Atenção',
+        application.MessageBox(Pchar('Escolha o banco de dados '), 'Atenção',
           MB_OK + MB_ICONERROR);
         abort;
       end;
@@ -1995,7 +2171,7 @@ begin
         dm.fdc.Connected := true
       else
       begin
-        application.MessageBox(PChar('Digite o usuário e senha !'), 'Atenção',
+        application.MessageBox(Pchar('Digite o usuário e senha !'), 'Atenção',
           MB_OK + MB_ICONERROR);
         abort;
       end;
@@ -2013,7 +2189,7 @@ begin
     except
       on E: Exception do
       begin
-        application.MessageBox(PChar('Erro ao conectar banco de dados : ' +
+        application.MessageBox(Pchar('Erro ao conectar banco de dados : ' +
           E.Message), 'Atenção', MB_OK + MB_ICONERROR);
         abort;
       end;
