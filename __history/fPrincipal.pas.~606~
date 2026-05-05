@@ -1,0 +1,2053 @@
+﻿unit fPrincipal;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.Buttons, Vcl.ComCtrls,
+  Vcl.StdCtrls, Registry, FireDAC.Comp.Client,
+  FireDAC.Stan.Intf,
+  FireDAC.Stan.Option,
+  FireDAC.Stan.Error, FireDAC.UI.Intf, FireDAC.Phys.Intf, FireDAC.Stan.Def,
+  FireDAC.Stan.Pool, FireDAC.Stan.Async, FireDAC.Phys, FireDAC.Phys.Oracle,
+  FireDAC.Phys.OracleDef, FireDAC.VCLUI.Wait, FireDAC.Stan.Param, FireDAC.DatS,
+  FireDAC.DApt.Intf, FireDAC.DApt, Data.DB, FireDAC.Comp.DataSet,
+  Winapi.WinSock, IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient;
+
+type
+  TPrincipal = class(TForm)
+    pnLateral: TPanel;
+    SpeedButton1: TSpeedButton;
+    SpeedButton2: TSpeedButton;
+    SpeedButton3: TSpeedButton;
+    SpeedButton4: TSpeedButton;
+    SpeedButton5: TSpeedButton;
+    SpeedButton6: TSpeedButton;
+    Panel2: TPanel;
+    pgPrincipal: TPageControl;
+    TabAnalise: TTabSheet;
+    TabMonitor: TTabSheet;
+    TabRede: TTabSheet;
+    LstPrincipal: TListBox;
+    MemoResult: TMemo;
+    tabLogin: TTabSheet;
+    GroupBox1: TGroupBox;
+    edtUsuario: TEdit;
+    edtSenha: TEdit;
+    lblUsuario: TLabel;
+    lblSenha: TLabel;
+    lblBanco: TLabel;
+    cbxDataBase: TComboBox;
+    btnConectar: TButton;
+    Label1: TLabel;
+    IdTCPClient1: TIdTCPClient;
+    procedure AdicionarItem(TextoLista, TextoMemo: String;
+      CorLinha: TColor); overload;
+    procedure FormCreate(Sender: TObject);
+    procedure LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
+      Rect: TRect; State: TOwnerDrawState);
+    procedure SpeedButton6Click(Sender: TObject);
+    function VerificaEstrutura: Boolean;
+    function EncontrarUnidadeAcrux: string;
+    function EspacoEmDiscoLivre(): Int64;
+    function GetProcessorName: string;
+    function GetProcessorCoreCount: Integer;
+    function GetTotalMemory: Double;
+    function GetTNSNamesPath: string;
+    function ProcurarValorRegistro(RootKey: HKEY; ChaveAtual: string;
+      ValorProcurado: string): TStringList;
+    function GetLocalIP: string;
+    function TestaConexao(sIP: string; nPorta: Integer): string;
+    function ValidarInfraestrutura(pdv, cpu, disco: Integer;
+      memoria: Double): Boolean;
+    function iif<T>(Condicao: Boolean; Verdadeiro, Falso: T): T;
+    function GetParametroMonitor(pGrupo, pParam: String): String;
+    function CorParametro(Valor: String): TColor;
+    function TamanhoDiretorio(Dir: string): Integer;
+
+    procedure SpeedButton1Click(Sender: TObject);
+    procedure LstPrincipalClick(Sender: TObject);
+    procedure LimparItensLista;
+    procedure FormActivate(Sender: TObject);
+    procedure ParseTNS;
+    procedure AtivaPage(APageControl: TPageControl; APage: TTabSheet);
+    procedure btnConectarClick(Sender: TObject);
+
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+type
+  TCorItem = class
+    Cor: TColor;
+    Detalhes: string;
+  end;
+
+var
+  Principal: TPrincipal;
+  sUnidade: String;
+  sUsuarioConsincoMonitor: String;
+  sUsuarioConsinco: String;
+  sResult: TStringList;
+  sEmpresaPDVs: TStringList;
+  slTNSConfig: TStringList;
+  DirBytes: Integer;
+
+implementation
+
+{$R *.dfm}
+
+uses fDm;
+
+procedure TPrincipal.AdicionarItem(TextoLista, TextoMemo: String;
+  CorLinha: TColor);
+var
+  Obj: TCorItem;
+begin
+  Obj := TCorItem.Create;
+  Obj.Cor := CorLinha;
+  Obj.Detalhes := TextoMemo;
+
+  LstPrincipal.Items.AddObject(TextoLista, Obj);
+end;
+
+procedure TPrincipal.LimparItensLista;
+var
+  i: Integer;
+begin
+  for i := 0 to LstPrincipal.Items.Count - 1 do
+    LstPrincipal.Items.Objects[i].Free;
+
+  LstPrincipal.Clear;
+end;
+
+procedure TPrincipal.FormActivate(Sender: TObject);
+var
+  sQryOwnner: TFDQuery;
+begin
+  AtivaPage(pgPrincipal, tabLogin);
+  // edtUsuario.Text := 'CONSINCOMONITOR';
+  // edtSenha.Text := 'CONSINCOMONITOR';
+  // Ajusta data no padrão dd/mm/yyyy para não falhar na validação de data, caso as config regionais da maquina estejam diferentes do padrão
+  System.SysUtils.formatSettings.ShortDateFormat := 'dd/mm/yyyy';
+  if now > StrToDate('31/12/2026') then
+  begin
+    application.MessageBox
+      ('Aplicação expirada, solicitar nova versão para o time de PDV !',
+      'Atenção', MB_OK + MB_iconInformation);
+    application.Terminate;
+    abort;
+  end;
+
+  ParseTNS;
+  sResult := TStringList.Create;
+  sEmpresaPDVs := TStringList.Create;
+  sEmpresaPDVs.Clear;
+
+  // Carrega usuários lidos do Registrod o Windows do banco de dados :   sUsuarioConsinco /  sUsuarioConsincoMonitor;
+
+  // Desativado temporariamente, voltar
+  // ProcurarValorRegistro(HKEY_LOCAL_MACHINE, '', 'Db').Text;
+
+  // TabLogin.TabVisible := False;
+  // PGCPrincipal.ActivePage := TabLogin;
+  edtUsuario.SetFocus;
+  Principal.Caption := Principal.Caption + ' | Owner ERP : ' + sUsuarioConsinco
+    + ' | Owner Monitor : ' + sUsuarioConsincoMonitor;
+  edtUsuario.Text := sUsuarioConsincoMonitor;
+
+  // Remover daqui, NÃO ESQUECER, pois este usuario tem que vir da função ProcurarValorRegistro
+  sUsuarioConsinco := 'CONSINCO2';
+  // FreeAndNil(sQryOwnner)
+
+end;
+
+procedure TPrincipal.FormCreate(Sender: TObject);
+begin
+  LstPrincipal.Style := lbOwnerDrawFixed;
+  LstPrincipal.ItemHeight := 20;
+  LstPrincipal.OnClick := LstPrincipalClick;
+  LstPrincipal.Clear;
+  MemoResult.Clear;
+
+  sUnidade := EncontrarUnidadeAcrux + '\';
+end;
+
+{ procedure TPrincipal.GetProcessorCoreCount;
+  var
+  SysInfo: SYSTEM_INFO;
+  begin
+  GetSystemInfo(SysInfo);
+  AdicionarItem('Quantidade de núcleos : ' +
+  IntToStr(SysInfo.dwNumberOfProcessors), 'Seu processador possui ' +
+  IntToStr(SysInfo.dwNumberOfProcessors) +
+  ' núcleo(s) lógico(s) disponíveis para execução paralela.', clMoneyGreen);
+  // Result := SysInfo.dwNumberOfProcessors;
+  end;
+}
+
+function TPrincipal.GetLocalIP: string;
+var
+  WSAData: TWSAData;
+  HostName: array [0 .. 255] of AnsiChar;
+  HostEnt: PHostEnt;
+  Addr: PAnsiChar;
+begin
+  Result := '';
+  if WSAStartup(MakeWord(2, 2), WSAData) = 0 then
+  begin
+    try
+      if gethostname(HostName, SizeOf(HostName)) = 0 then
+      begin
+        HostEnt := gethostbyname(HostName);
+        if Assigned(HostEnt) then
+        begin
+          Addr := inet_ntoa(PInAddr(HostEnt^.h_addr_list^)^);
+          if Assigned(Addr) then
+            Result := string(Addr);
+        end;
+      end;
+    finally
+      WSACleanup;
+    end;
+  end;
+end;
+
+function TPrincipal.GetParametroMonitor(pGrupo, pParam: String): String;
+Var
+  Qry: TFDQuery;
+begin
+  try
+    Qry := TFDQuery.Create(Nil);
+    Qry.Connection := dm.fdc;
+    Qry.SQL.Clear;
+
+    { sQry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''Geral'',''IntegracaoConsinco'')),''S'',''SIM'',''NAO'') IntegradoERP from dual');
+    }
+
+    Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(' + QuotedStr(pGrupo) + ',' + QuotedStr(pParam) +
+      ')),''S'',''SIM'',''NAO'') Retorno from dual');
+    Qry.open;
+    Result := Qry.FieldByName('Retorno').AsString;
+
+  finally
+    FreeAndNil(Qry);
+  end;
+
+end;
+
+function TPrincipal.CorParametro(Valor: String): TColor;
+begin
+  if SameText(Valor, 'NAO') then
+    Result := clRed
+  else
+    Result := clMoneyGreen;
+end;
+
+function TPrincipal.GetProcessorCoreCount: Integer;
+var
+  SysInfo: SYSTEM_INFO;
+begin
+  GetSystemInfo(SysInfo);
+  Result := SysInfo.dwNumberOfProcessors;
+end;
+
+function TPrincipal.GetProcessorName: string;
+var
+  Reg: TRegistry;
+begin
+  Result := 'Informação não disponível';
+
+  Reg := TRegistry.Create;
+  try
+    Reg.RootKey := HKEY_LOCAL_MACHINE;
+
+    if Reg.OpenKeyReadOnly('HARDWARE\DESCRIPTION\System\CentralProcessor\0')
+    then
+    begin
+      if Reg.ValueExists('ProcessorNameString') then
+        Result := Reg.ReadString('ProcessorNameString');
+
+      Reg.CloseKey;
+    end;
+  finally
+    Reg.Free;
+  end;
+end;
+
+{ procedure TPrincipal.GetProcessorName;
+  var
+  Reg: TRegistry;
+  begin
+  // Result := 'Informação não disponível';
+  Reg := TRegistry.Create;
+  try
+  Reg.RootKey := HKEY_LOCAL_MACHINE;
+  if Reg.OpenKeyReadOnly('HARDWARE\DESCRIPTION\System\CentralProcessor\0')
+  then
+  begin
+  AdicionarItem('Nome do processador : ' +
+  Reg.ReadString('ProcessorNameString'),
+  'Modelo de CPU identificado no registro do Windows: ' +
+  Reg.ReadString('ProcessorNameString'), clMoneyGreen);
+  // Result := Reg.ReadString('ProcessorNameString');
+  Reg.CloseKey;
+  end;
+  finally
+  Reg.Free;
+  end;
+  end;
+}
+
+function TPrincipal.GetTNSNamesPath: string;
+var
+  Reg: TRegistry;
+  SubKeyNames: TStringList;
+  Name: string;
+begin
+  Reg := TRegistry.Create;
+  Try
+    Reg.RootKey := HKEY_LOCAL_MACHINE;
+    Reg.OpenKeyReadOnly('SOFTWARE\ORACLE');
+    SubKeyNames := TStringList.Create;
+    Try
+      Reg.GetKeyNames(SubKeyNames);
+      for Name in SubKeyNames do
+        // oracle 10 save path to ORACLE_HOME in registry key like this
+        // HKEY_LOCAL_MACHINE\SOFTWARE\ORACLE\KEY_OraClient10g_home1\ORACLE_HOME
+        // for oracle 8 and 9 another key
+        if pos('KEY_', Name) = 1 then
+        begin
+          Reg.OpenKeyReadOnly(Name);
+          // for oracle 10 path to tnsnames.ora like this
+          // %ORACLE_HOME%\NETWORK\ADMIN\tnsnames.ora
+          // for oracle 8 and 9 another path
+          Result := Reg.ReadString('ORACLE_HOME') +
+            '\NETWORK\ADMIN\tnsnames.ora';
+        end;
+    Finally
+      SubKeyNames.Free;
+    End;
+  Finally
+    Reg.Free;
+  End;
+end;
+
+function TPrincipal.GetTotalMemory: Double;
+var
+  MemStatus: TMemoryStatusEx;
+begin
+  MemStatus.dwLength := SizeOf(TMemoryStatusEx);
+  if GlobalMemoryStatusEx(MemStatus) then
+    Result := MemStatus.ullTotalPhys / (1024 * 1024 * 1024)
+  else
+    Result := -1;
+end;
+
+procedure TPrincipal.LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
+  Rect: TRect; State: TOwnerDrawState);
+var
+  Obj: TCorItem;
+begin
+  Obj := TCorItem(LstPrincipal.Items.Objects[Index]);
+
+  with LstPrincipal.Canvas do
+  begin
+    Brush.Color := Obj.Cor;
+    FillRect(Rect);
+
+    Font.Name := 'Segoe UI';
+    Font.Size := 8;
+    Font.Color := clBlack;
+
+    if odSelected in State then
+    begin
+      Brush.Color := clNavy;
+      FillRect(Rect);
+      Font.Color := clWhite;
+    end;
+
+    // TextOut(Rect.Left + 10, Rect.Top + 6, LstPrincipal.Items[Index]);
+    TextOut(Rect.Left + 2, Rect.Top + 1, LstPrincipal.Items[Index]);
+  end;
+end;
+
+procedure TPrincipal.LstPrincipalClick(Sender: TObject);
+var
+  Obj: TCorItem;
+  TextoSelecionado: string;
+begin
+  MemoResult.Clear;
+
+  if LstPrincipal.ItemIndex < 0 then
+    Exit;
+
+  TextoSelecionado := LstPrincipal.Items[LstPrincipal.ItemIndex];
+  Obj := TCorItem(LstPrincipal.Items.Objects[LstPrincipal.ItemIndex]);
+
+  if Assigned(Obj) and (Trim(Obj.Detalhes) <> '') then
+    MemoResult.Lines.Add(Obj.Detalhes)
+  else
+    MemoResult.Lines.Add('Detalhes da linha selecionada: ' + TextoSelecionado);
+end;
+
+procedure TPrincipal.SpeedButton1Click(Sender: TObject);
+Var
+  sQry, sQry1: TFDQuery;
+  sListaMensagens: TStringList;
+  nPortaServidor, nTamanhoInput, nTamanhoOutput, a, nContErro: Integer;
+  Retorno: String;
+begin
+  try
+    a := 0;
+    nContErro := 0;
+    nPortaServidor := 0;
+    nTamanhoInput := 0;
+    nTamanhoOutput := 0;
+    nContErro := 0;
+    sListaMensagens := TStringList.Create;
+    sListaMensagens.Clear;
+
+    sQry := TFDQuery.Create(Nil);
+    sQry.Connection := dm.fdc;
+    sQry.SQL.Clear;
+
+    sQry1 := TFDQuery.Create(Nil);
+    sQry1.Connection := dm.fdc;
+    sQry1.SQL.Clear;
+
+    LimparItensLista;
+    MemoResult.Clear;
+
+    LimparItensLista;
+    VerificaEstrutura;
+
+    AdicionarItem('Informações do hardware do servidor ',
+      'Clique nas linhas abaixo para visualizar detalhes personalizados do processador.',
+      clGray);
+
+    AdicionarItem('Informações do processador : ' + GetProcessorName,
+      'Dentro dos pre requisitos', clMoneyGreen);
+
+    AdicionarItem('Quantidade núcleos processador : ' +
+      IntToStr(GetProcessorCoreCount), 'Quantidade de Nucleos ', clMoneyGreen);
+
+    AdicionarItem('Informações Memória RAM : ' + FormatFloat('0.00',
+      GetTotalMemory) + ' GB', 'Dentro dos pre requisitos', clMoneyGreen);
+
+    AdicionarItem('Espaço livre em disco : ' + IntToStr(EspacoEmDiscoLivre()) +
+      ' GB', 'Resumo de capacidade livre identificado na análise atual do ambiente.',
+      clMoneyGreen);
+
+    AdicionarItem('Informações de ambiente do servidor : ', '', clGray);
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select nvl(to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''ServidorLocal'',''Port'')),7011) PortaServidor from dual');
+    sQry.open;
+
+    // Verificar porta do servidor
+    if sQry.FieldByName('PortaServidor').AsInteger <> 7011 then
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Porta de comunicação do serviço do servidor de PDVS está configurada como : '
+        + sQry.FieldByName('PortaServidor').AsString +
+        ', que é diferente do padrão 7011, isto poderá causar problemas de comunicação com os PDVs , configure a porta do serviço nas configurações de "Servidor Local" do servidor de PDVs, para 7011 ',
+        clMoneyGreen);
+    end;
+    nPortaServidor := sQry.FieldByName('PortaServidor').AsInteger;
+
+    // Verificar IP do servidor.
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''ServidorLocal'',''IP'')) IPServidor from dual');
+    sQry.open;
+    if Trim(sQry.FieldByName('IPServidor').AsString) <> '' then
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Existe endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, ('
+        + Trim(sQry.FieldByName('IPServidor').AsString) +
+        ') isto faz com que o serviço se baseie neste I.P. configurado para inicialização, e não no I.P. da máquina local. ',
+        clMoneyGreen);
+
+      if Trim(sQry.FieldByName('IPServidor').AsString) <> Trim(GetLocalIP) then
+      begin
+        AdicionarItem('Porta comunicação servidor :',
+          'O endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, está DIFERENTE do I.P. da máquina do servidor, isto causará problemas na inicialização do serviço do servidor de PDVs.'
+          + 'I.P. Configurado : ' + Trim(sQry.FieldByName('IPServidor')
+          .AsString) + ' - I.P. da máquina do servidor : ' + Trim(GetLocalIP) +
+          'Exclua o I.P. configurado das configurações de "Servidor Local" do servidor de PDVs, para que a aplicação considere o I.P. da máquina local, ou então configure o I.P. corretamente para evitar problemas na comunicação com os PDVs',
+          clMoneyGreen);
+
+        // Testa com o I.P. Configurado no servidor.
+        AdicionarItem('Porta comunicação servidor : ',
+          'O teste de conectividade com o serviço será executado, utilizando o I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs : '
+          + Trim(sQry.FieldByName('IPServidor').AsString) + ' Porta : ',
+          clMoneyGreen);
+        // IntToStr(nPortaServidor));
+
+        AdicionarItem('Porta comunicação servidor : ',
+          TestaConexao(Trim(sQry.FieldByName('IPServidor').AsString),
+          nPortaServidor), clMoneyGreen);
+      end;
+    end
+    else
+    begin
+      AdicionarItem('Porta comunicação servidor : ',
+        'Verificando conectividade local do servidor de PDVs (Telnet) com o I.P da máquina local -> '
+        + Trim(GetLocalIP) + ' Porta : ' + IntToStr(nPortaServidor),
+        clMoneyGreen);
+      // redt1.Lines.Add(TestaConexao(Trim(GetLocalIP), nPortaServidor),clMoneyGreen););
+    end;
+
+    // Qtd PDVs Ativos
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select nvl(count(1),0) qtdePDV from ' +
+      sUsuarioConsincoMonitor + '.tb_checkout a where a.ativo = ''S''');
+    sQry.open;
+
+    if not ValidarInfraestrutura(sQry.FieldByName('qtdePDV').AsInteger,
+      GetProcessorCoreCount, EspacoEmDiscoLivre(), GetTotalMemory) then
+    begin
+      AdicionarItem('Pré Requisitos',
+        ' Servidor fora dos pré requisitos ', clRed);
+    end
+    else
+      AdicionarItem('Pré Requisitos', ' Servidor dentro dos pré requisitos ',
+        clMoneyGreen);
+
+    // Parametros do  monitor
+    AdicionarItem('VERIFICANDO INFORMAÇÕES DE PARAMETROS DO SERVIDOR DE PDVS',
+      '', clGray);
+
+    Retorno := GetParametroMonitor('ExportarMovimento', 'Ativo');
+    AdicionarItem('Exportação de movimento ativa : ' + Retorno,
+      'Exportacao de movimento', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('ReceberMovimento', 'Ativo');
+    AdicionarItem('Recepção de movimento ativo : ' + Retorno,
+      'Recepção  de movimento', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('ReceberMovimento', 'Ativo');
+    AdicionarItem('Recepção de movimento ativo : ' + Retorno,
+      'Recepção  de movimento', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('Geral', 'IntegracaoConsinco');
+    AdicionarItem('Integração Consinco ? : ' + Retorno, 'Integração Consinco',
+      CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('Geral', 'Integracao');
+    AdicionarItem('Tipo de integração : ' + Retorno, 'Tipo de integração ',
+      CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('GerarCargaMonitor', 'Ativo');
+    AdicionarItem('Geração de carga monitor ativo : ' + Retorno,
+      'Geração de carga monitor ativo ', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('GerarCargaPDV', 'Ativo');
+    AdicionarItem('Geração de carga PDV ativo : ' + Retorno,
+      'Geração de carga PDV ativo ', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('EnviarCargaPDV', 'Ativo');
+    AdicionarItem('Envia carga PDV ativo : ' + Retorno,
+      'Envia carga PDV ativo ', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraEmpresa');
+    AdicionarItem('ListaNegraEmpresa' + Retorno, 'ListaNegraEmpresa ',
+      CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraSegmento');
+    AdicionarItem('ListaNegraSegmento' + Retorno, 'ListaNegraSegmento ',
+      CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraDivisao');
+    AdicionarItem('ListaNegraDivisao' + Retorno, 'ListaNegraDivisao ',
+      CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('EnviarCargaPDV', 'Delegar');
+    AdicionarItem('Delegar' + Retorno, 'Delegar ', CorParametro(Retorno));
+
+    Retorno := GetParametroMonitor('Geral', 'UsoProcesso');
+    AdicionarItem('UsoProcesso' + Retorno, 'UsoProcesso ',
+      CorParametro(Retorno));
+
+    // redt1.Lines.Add('Ultimas alterações em parametros ');
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      (' select a.sequsuario,a.usuario,a.dtahoremissao,a.descoperacao,a.aplicacao,a.descricao, '
+      + ' DBMS_LOB.SUBSTR(a.de, 4000, 1) AS De, ' +
+      ' DBMS_LOB.SUBSTR(a.para, 4000, 1) AS Para ' + ' from ' +
+      sUsuarioConsincoMonitor + '.vw_histmanutencao a ' +
+      ' order by a.dtahoremissao desc ' + ' FETCH FIRST 15 ROWS ONLY');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      { redt1.Lines.Add
+        ('Sequsuario | DataHora     | Operacao | Descricao | Operação ');
+      }
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add(sQry.FieldByName('sequsuario').AsString + ' | ' +
+          sQry.FieldByName('dtahoremissao').AsString + ' | ' +
+          sQry.FieldByName('descoperacao').AsString + ' | ' +
+          sQry.FieldByName('descricao').AsString + ' | ' +
+          sQry.FieldByName('descoperacao').AsString);
+        sQry.Next;
+      end;
+    end
+    else
+      sListaMensagens.Add('Nenhum parametro altrado recentemente ! ');
+
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Ultimas alterações em parametros ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    nTamanhoInput := TamanhoDiretorio
+      ('C:\C5Client\AcruxMonitor\Services\cache\input') div (1024 * 1024);
+    // redt1.Lines.Add('Tamanho diretório Input :');
+    // redt1.Lines.Add(IntToStr(nTamanhoInput) + ' MB');
+    // if nTamanhoInput > 999 then
+    // begin
+    AdicionarItem('INPUT  ', IntToStr(nTamanhoInput), clRed);
+    // redt1.SelAttributes.Color := clRed;
+    // redt1.Lines.Add
+    // ('Alerta : Tamanho do diretório INPUT muito grande, verificar possibilidade de exclusão do diretório');
+    // end;
+
+    nTamanhoOutput := TamanhoDiretorio
+      ('C:\C5Client\AcruxMonitor\Services\cache\output') div (1024 * 1024);
+    // if nTamanhoOutput > 999 then
+    // begin
+    AdicionarItem('OUTPUT  ', IntToStr(nTamanhoOutput), clRed);
+    // end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select  ''PDV'' DESCRICAO, a.versao, count(1) qtd_terminais from ' +
+      sUsuarioConsincoMonitor +
+      '.tb_versaoarquivopdv a where lower(a.nomearquivo) = ''acruxpdv.exe''  group by a.versao '
+      + ' union all ' +
+      ' select ''AcruxMonitor'' "DESCRICAO",to_char(a.valor) versao, 1 qtd_terminais '
+      + '  from ' + sUsuarioConsincoMonitor + '.tb_informacaoaplicacao a ' +
+      'where lower(a.propriedade) = ''versao''' + ' order by 1');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      // redt1.Lines.Add('Produto       Versao       Quantidade');
+      while not sQry.Eof do
+      begin
+
+        { AdicionarItem(PadC(Trim(sQry.FieldByName('descricao').AsString), 20,
+          ' ', False) + '|' + PadC(Trim(sQry.FieldByName('versao').AsString),
+          20, ' ', False) + '|' + sQry.FieldByName('qtd_terminais')
+          .AsString, clRed);
+        }
+
+        sQry.Next;
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select 1  from ' + sUsuarioConsincoMonitor +
+      '.tb_informacaoaplicacao a  where lower(a.propriedade) = ''versao''  and to_char(a.valor) <   (select max(a.versao)  from '
+      + sUsuarioConsincoMonitor +
+      '.tb_versaoarquivopdv a  where lower(a.nomearquivo) = ''acruxpdv'')');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('PDVs com versão superior a versão do servidor' + Retorno,
+        'PDV SUPERIOR ', clRed);
+    end
+    else
+    begin
+      AdicionarItem('Nenhum PDV com versão superior a versão do servidor' +
+        Retorno, 'PDV SUPERIOR ', clMoneyGreen);
+    end;
+
+    // redt1.Lines.Add('LOGS DO SERVIDOR DE PDVS');
+    // redt1.Lines.Add('Verificando Logs de falha de importacao ');
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.nroempresa,a.nrocheckout,a.dtamovimento,a.dtahoremissao,a.mensagem from '
+      + sUsuarioConsincoMonitor + '.tb_logfalhaimportacao a');
+    for a := 1 to 5 do
+    begin
+      sQry.open;
+      // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 5 ');
+      if sQry.RecordCount > 0 then
+        while not sQry.Eof do
+        begin
+          if nContErro = 0 then
+          begin
+            // redt1.SelAttributes.Color := clRed;
+            // redt1.Lines.Add
+            // ('Empresa | Nrocheckout | Dtamovimento | Dtahoremissao | Mensagem ');
+            nContErro := 1;
+          end;
+          // redt1.SelAttributes.Color := clRed;
+
+          AdicionarItem('Logs do Servidor ' + Retorno, 'Logs do Servidor ',
+            clMoneyGreen);
+
+          AdicionarItem('Logs do Servidor', sQry.FieldByName('nroempresa')
+            .AsString + ' | ' + sQry.FieldByName('nrocheckout').AsString + ' | '
+            + sQry.FieldByName('dtamovimento').AsString + ' | ' +
+            sQry.FieldByName('dtahoremissao').AsString + ' | ' +
+            sQry.FieldByName('mensagem').AsString, clMoneyGreen);
+
+          sQry.Next;
+        end;
+      // Executa somente ate encontrar falha.
+      if sQry.RecordCount > 0 then
+        break;
+
+      sQry.close;
+    end;
+
+    nContErro := 0;
+    AdicionarItem('Verificando informações de cargas' + Retorno,
+      'Verificando informações de cargas ', clMoneyGreen);
+
+    AdicionarItem('Verificando Logs de falha em cargas ' + Retorno,
+      'Verificando Logs de falha em cargas  ', clGray);
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.OBJECT_NAME tabela from dba_objects a where lower(a.OWNER) = '
+      + QuotedStr(sUsuarioConsincoMonitor) +
+      ' AND lower(A.OBJECT_NAME) LIKE ''tbe_%'' AND lower(A.OBJECT_TYPE)  = ''table'' order by a.OBJECT_NAME');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      for a := 1 to 3 do
+      begin
+        // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 3 ');
+        while not sQry.Eof do
+        begin
+          sQry.SQL.Clear;
+          sQry.SQL.Add('select 1 qtde from ' + sUsuarioConsincoMonitor + '.' +
+            sQry.FieldByName('tabela').AsString);
+          sQry.open;
+          if sQry.RecordCount > 0 then
+          begin
+            sListaMensagens.Add('Falha de carga encontrada na tabela : ' +
+              sQry.FieldByName('tabela').AsString);
+            nContErro := 1;
+          end;
+          sQry.Next;
+        end;
+        // Executa somente ate encontrar falha.
+        if nContErro = 1 then
+          break;
+
+        sQry.First;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Falha de carga encontrada na tabela ',
+        sListaMensagens.Text, CorParametro(Retorno));
+
+
+    // Carga ERP -> Monitor
+    // AdicionarItem('Verificando entidades de carga inexistens no processo de carga do ERP para o monitor',
+    // sListaMensagens.Text, CorParametro(Retorno));
+
+    // redt1.Lines.Add
+    // ('Verificando entidades de carga inexistens no processo de carga do ERP para o monitor');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      (' SELECT SUBSTR(a.TABLE_NAME, 1, 2) || SUBSTR(a.TABLE_NAME, 4) Tabela ' +
+      '  FROM all_tables a WHERE lower(a.owner) = ' +
+      QuotedStr(sUsuarioConsincoMonitor) +
+      '   AND a.table_name LIKE ''TBE\_%'' ESCAPE ''\''' + 'and not exists(' +
+      'select 1' + '    from tb_entidadecargamonitor b ' +
+      ' where Upper(b.tabela) =' +
+      '         Upper(SUBSTR(a.TABLE_NAME, 1, 2) || SUBSTR(a.TABLE_NAME, 4)))' +
+      'ORDER BY a.table_name');
+
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Entidade faltante :' + sQry.FieldByName('tabela')
+          .AsString);
+        sQry.Next;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    // Carga  Monitor -> PDV
+    // redt1.Lines.Add
+    // ('Verificando entidades de carga inexistens no processo de carga do monitor para o PDV');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      (' SELECT SUBSTR(a.TABLE_NAME, 1, 2) || SUBSTR(a.TABLE_NAME, 4) Tabela ' +
+      ' FROM all_tables a ' + ' WHERE lower(a.owner) =  ' +
+      QuotedStr(sUsuarioConsincoMonitor) +
+      '   AND a.table_name LIKE ''TBE\_%'' ESCAPE ''\''' +
+      ' and not exists (select 1' + ' from tb_entidadecargapdv b' +
+      ' where Upper(b.tabela) = Upper(SUBSTR(a.TABLE_NAME, 1, 2) ||' +
+      ' SUBSTR(a.TABLE_NAME, 4)))' + ' ORDER BY a.table_name');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Entidade faltante :' + sQry.FieldByName('tabela')
+          .AsString);
+        sQry.Next;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem
+        ('Verificando entidades de carga inexistens no processo de carga do monitor para o PDV : ',
+        sListaMensagens.Text, CorParametro(Retorno));
+
+    // redt1.Lines.Add
+    // ('Verificando entidades de carga do monitor para o ERP inativas');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.tabela from tb_entidadecargamonitor a  where a.ativo = ''N''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Entidade inativa :' + sQry.FieldByName('tabela')
+          .AsString);
+        sQry.Next;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    // redt1.Lines.Add
+    // ('Verificando entidades de carga do Monitor para o PDV inativas');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.tabela from tb_entidadecargapdv a  where a.ativo = ''N''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Entidade inativa :' + sQry.FieldByName('tabela')
+          .AsString);
+        sQry.Next;
+      end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    // redt1.Lines.Add('Verificando logs do monitor (-3 dias)');
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select a.classe, a.mensagem, count(1) QtdLog  from ' +
+      sUsuarioConsincoMonitor +
+      '.tb_log a where a.dtahoremissao >= sysdate - 3  group by a.classe, a.mensagem  having count(1) > 5 order by 3 desc');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      // redt1.SelAttributes.Style := [fsBold];
+      // redt1.Lines.Add('Classe | Mensagem | Qtde de ocorrencias');
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add(Trim(sQry.FieldByName('classe').AsString) + ' | ' +
+          Copy(sQry.FieldByName('mensagem').AsString, 0, 100) + ' | ' +
+          sQry.FieldByName('QtdLog').AsString);
+        { redt1.Lines.Add(Trim(sQry.FieldByName('classe').AsString) + ' | ' +
+          Copy(sQry.FieldByName('mensagem').AsString, 0, 100) + ' | ' +
+          sQry.FieldByName('QtdLog').AsString);
+        }
+        sQry.Next;
+      end;
+    end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Log Monitor : ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    // redt1.Lines.Add
+    // ('Verificando logs de falha de exportação do  monitor (-3 dias)');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select a.mensagem msgerro,count(1) qtdeFalhaExporta  from ' +
+      sUsuarioConsincoMonitor +
+      '.tb_logfalhaexportacao a where a.dtahoremissao >= sysdate -3 group by a.mensagem  having count(1) > 5  order by 2 desc');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      // redt1.SelAttributes.Style := [fsBold];
+      // redt1.Lines.Add('Mensagem | Qtde de ocorrencias');
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Logs de falha de exportação :' +
+          Trim(Copy(sQry.FieldByName('msgerro').AsString, 0, 100) + ' | ' +
+          sQry.FieldByName('qtdeFalhaExporta').AsString));
+
+        // redt1.Lines.Add(Trim(Copy(sQry.FieldByName('msgerro').AsString, 0,
+        // 100) + ' | ' + sQry.FieldByName('qtdeFalhaExporta').AsString));
+        sQry.Next;
+      end;
+    end;
+    if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Log falha exportação : ', sListaMensagens.Text,
+        CorParametro(Retorno));
+
+    // Fazer aqui ujm if >0  e colocar em vermelho, fazer para todas condicoes da aplicação.
+    // redt1.SelAttributes.Style := [fsBold];
+    // redt1.Lines.Add(sQry.FieldByName('QtdeLog').AsString);
+
+    // pb1.Position := pb1.Position + 1;
+    // redt1.Lines.Add('  ');
+    // redt1.SelAttributes.Style := [fsBold];
+    // redt1.Lines.Add('Verificando logs de falha LOGDBERRO (-3 dias)');
+
+    sListaMensagens.Clear;
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select a.msgerro, count(1) QtdLogdbErro  from ' +
+      sUsuarioConsincoMonitor +
+      '.tb_logdberro a where a.dtahorevento >= sysdate - 3  group by a.msgerro having count(1) > 5 order by 2 desc');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      // redt1.SelAttributes.Style := [fsBold];
+      // redt1.Lines.Add('Mensagem | Qtde de ocorrencias');
+      while not sQry.Eof do
+      begin
+        sListaMensagens.Add('Verificando logs de falha LOGDBERRO (-3 dias)' +
+          Trim(Copy(sQry.FieldByName('msgerro').AsString, 0, 100) + ' | ' +
+          sQry.FieldByName('QtdLogdbErro').AsString));
+        // redt1.Lines.Add(Trim(Copy(sQry.FieldByName('msgerro').AsString, 0,
+        // 100) + ' | ' + sQry.FieldByName('QtdLogdbErro').AsString));
+        // sQry.Next;
+      end;
+      if Trim(sListaMensagens.Text) <> '' then
+        AdicionarItem('Log Dberro : ', sListaMensagens.Text,
+          CorParametro(Retorno));
+
+      // pb1.Position := pb1.Position + 1;
+      // redt1.Lines.Add('  ');
+      // redt1.SelAttributes.style := [fsBold];
+      // redt1.Lines.Add
+      // ('Verificando movimentos por status de replicação (-3 dias) ');
+
+      sListaMensagens.Clear;
+      sQry.SQL.Clear;
+      sQry.SQL.Add(' SELECT CASE ' + '         WHEN replicacao IN (''F'') THEN'
+        + '        ''Finalizado'' ' + '         WHEN replicacao = ''P'' THEN' +
+        '          ''Pendente'' ' + '         WHEN replicacao = ''S'' THEN' +
+        '          ''Transicao'' ' + '         WHEN replicacao = ''N'' THEN' +
+        '          ''Nao Exportado''' + '         WHEN replicacao = ''E'' THEN'
+        + '          ''Falha exportacao''' +
+        'END AS replicacao,count(1) QtdeMov FROM ' + sUsuarioConsincoMonitor +
+        ' .tb_docto a where a.dtamovimento >= trunc(sysdate) - 3 group by a.replicacao');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        // redt1.Lines.Add('Replicacao | Qtde de ocorrencias');
+        while not sQry.Eof do
+        begin
+          sListaMensagens.Add(Trim(sQry.FieldByName('replicacao').AsString) +
+            ' | ' + sQry.FieldByName('QtdeMov').AsString);
+
+          { redt1.Lines.Add(Trim(sQry.FieldByName('replicacao').AsString) + ' | '
+            + sQry.FieldByName('QtdeMov').AsString);
+          }
+          sQry.Next;
+        end;
+      end;
+      if Trim(sListaMensagens.Text) <> '' then
+        AdicionarItem('Movimentações : ', sListaMensagens.Text,
+          CorParametro(Retorno));
+
+      sQry.SQL.Clear;
+      sQry.SQL.Add('select max(a.dtahorinclusao) dtahorinclusao from ' +
+        sUsuarioConsincoMonitor +
+        '.tb_docto a where a.dtamovimento >= trunc(sysdate)-3 and a.especie in (''CF'',''NF'')');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        AdicionarItem('Ultimo movimento integrado servidor de PDVs',
+          'Data/Hora do ultimo movimento integrado no servidor de PDVs dos últimos 03 dias (TB_DOCTO) : '
+          + sQry.FieldByName('dtahorinclusao').AsString, clMoneyGreen);
+      end;
+
+      // terminar de implementar
+      // if integracao = 'consinco' then
+      sQry.SQL.Clear;
+      sQry.SQL.Add('select max(a.dtahoremissao) dtahoremissao from ' +
+        sUsuarioConsinco +
+        '.mfl_doctofiscal a  where a.pdvorigem = 1 and a.dtamovimento >= trunc(sysdate)-3');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        AdicionarItem('Data/Hora do ultimo movimento integrado no ERP',
+          'Data/Hora do ultimo movimento integrado no servidor de PDVs dos últimos 03 dias (TB_DOCTO) : '
+          + sQry.FieldByName('dtahoremissao').AsString, clMoneyGreen);
+      end;
+
+      // redt1.Lines.Add('Cargas totais geradas no dia de hoje ');
+      sQry.SQL.Clear;
+      sQry.SQL.Add(' select a.tabela, ' + ' case ' +
+        '  when a.tipocarga in (''T'') then ' + '       ''Total''' +
+        '  when a.tipocarga in (''P'') then ' + '       ''Parcial''' +
+        ' end TipoCarga, ' + ' case ' + '  when a.status in (0) then ' +
+        '''Pendente de envio''' + '  when a.status in (1) then ' +
+        '''Enviado com sucesso''' + '  when a.status in (2) then' +
+        '''Processado no cliente''' + 'when a.status in (3) then' +
+        '''Falha no envio do pacote''' + 'when a.status in (4) then' +
+        '''Falha ao carregar o pacote no destino''' +
+        '  when a.status in (5) then' + '''Pacote já existe''' +
+        '  when a.status in (6) then' + '''Pacote não encontrado''' +
+        ' end Status,' + '  count(1) qtde' + ' from tb_controlecargapdv a' +
+        ' where trunc(a.dtahoremissao) = trunc(sysdate)' +
+        ' and a.tipocarga = ''T''' + ' group by a.tipocarga,a.tabela,a.status' +
+        ' order by 3');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        // redt1.SelAttributes.Style := [fsBold];
+        // redt1.Lines.Add('Tabela | Status | qtde');
+        while not sQry.Eof do
+        begin
+          sListaMensagens.Add(Trim(sQry.FieldByName('replicacao').AsString) +
+            ' | ' + sQry.FieldByName('QtdeMov').AsString);
+          { redt1.Lines.Add(sQry.FieldByName('Tabela').AsString + ' | ' +
+            sQry.FieldByName('Status').AsString + ' | ' +
+            sQry.FieldByName('qtde').AsString);
+          }
+          sQry.Next;
+        end;
+      end;
+      if Trim(sListaMensagens.Text) <> '' then
+        AdicionarItem('QtdeMov : ', sListaMensagens.Text,
+          CorParametro(Retorno));
+
+      AdicionarItem('VERIFICANDO INFORMAÇÕES DO BANCO DE DADOS ORACLE ', '',
+        clMoneyGreen);
+
+      // redt1.Lines.Add('VERIFICANDO INFORMAÇÕES DO BANCO DE DADOS ORACLE');
+
+      // Sessoes ativa do banco
+      // Exibir as sessões ativas e não somente a qtde
+      sQry.SQL.Clear;
+      sQry.SQL.Add
+        ('select count(1) qtdSessaoAtiva from  V$SESSION a where lower(a.SCHEMANAME) in ('
+        + QuotedStr(sUsuarioConsinco) + ',' + QuotedStr(sUsuarioConsincoMonitor)
+        + ') AND lower(a.status) = ''active''');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        AdicionarItem('Quantidade de sessoes ativas : ',
+          sQry.FieldByName('qtdSessaoAtiva').AsString, clMoneyGreen);
+      end;
+
+      // Sessoes em locck no banco
+      sQry.SQL.Clear;
+      sQry.SQL.Add(' SELECT ' +
+        '    s1.sid || '','' || s1.serial# AS sessao_bloqueada, ' +
+        '    s1.username AS usuario_bloqueado, ' +
+        '    s1.machine AS maquina_bloqueada, ' +
+        '    s1.osuser AS sistema_operacional_bloqueado, ' +
+        '    s2.sid || '','' || s2.serial# AS sessao_bloqueadora, ' +
+        '    s2.username AS usuario_bloqueador, ' +
+        '    s2.machine AS maquina_bloqueadora, ' +
+        '    s2.osuser AS sistema_operacional_bloqueador, ' + '    l1.id1, ' +
+        '    l1.id2, ' + '    l1.type ' + ' FROM ' + '    v$lock l1 ' +
+        '    JOIN v$session s1 ON s1.sid = l1.sid ' +
+        '    JOIN v$lock l2 ON l1.id1 = l2.id1 AND l1.id2 = l2.id2 AND l1.sid != l2.sid '
+        + '    JOIN v$session s2 ON s2.sid = l2.sid ' + ' WHERE ' +
+        '    l1.request > 0 ' + '    AND l2.block = 1');
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      begin
+        // Melhoria na visualização.
+        // redt1.Lines.Add('Sessões em Lock no banco de dados');
+        // redt1.Lines.Add
+        // ('sessao_bloqueada | usuario_bloqueado | maquina_bloqueada | usuario_bloqueador | maquina_bloqueadora | sistema_operacional_bloqueador | id1 | id2 | type ');
+        while not sQry.Eof do
+        begin
+          sListaMensagens.Add(Trim(sQry.FieldByName('sessao_bloqueada')
+            .AsString) + ' | ' + sQry.FieldByName('usuario_bloqueado').AsString
+            + ' | ' + sQry.FieldByName('maquina_bloqueada').AsString + ' | ' +
+            sQry.FieldByName('usuario_bloqueador').AsString + ' | ' +
+            sQry.FieldByName('maquina_bloqueadora').AsString + ' | ' +
+            sQry.FieldByName('sistema_operacional_bloqueador').AsString + ' | '
+            + sQry.FieldByName('id1').AsString + ' | ' + sQry.FieldByName('id2')
+            .AsString + ' | ' + sQry.FieldByName('type').AsString);
+
+          { redt1.Lines.Add(Trim(sQry.FieldByName('sessao_bloqueada').AsString) +
+            ' | ' + sQry.FieldByName('usuario_bloqueado').AsString + ' | ' +
+            sQry.FieldByName('maquina_bloqueada').AsString + ' | ' +
+            sQry.FieldByName('usuario_bloqueador').AsString + ' | ' +
+            sQry.FieldByName('maquina_bloqueadora').AsString + ' | ' +
+            sQry.FieldByName('sistema_operacional_bloqueador').AsString + ' | '
+            + sQry.FieldByName('id1').AsString + ' | ' + sQry.FieldByName('id2')
+            .AsString + ' | ' + sQry.FieldByName('type').AsString);
+          }
+          sQry.Next;
+        end;
+      end;
+      if Trim(sListaMensagens.Text) <> '' then
+        AdicionarItem('Sessões em lock : ', sListaMensagens.Text,
+          CorParametro(Retorno));
+
+      // Sessoes em locck no espera, alterar para exibir quais sessões melhoria
+      sQry.SQL.Clear;
+      sQry.SQL.Add(' SELECT count(1) qtdSessaoEmEspera FROM dba_waiters');
+      sQry.open;
+      /// if sQry.FieldByName('qtdSessaoEmEspera').AsInteger > 0 then
+      if sQry.RecordCount > 0 then
+      begin
+        AdicionarItem('Quantidade de sessoes em espera : ',
+          'Existem sessoes em espera no banco de dados, utilize o DBMONITOR para identificar o problemag',
+          clMoneyGreen);
+      end;
+    end;
+
+    // redt1.Lines.Add('Linguagem (nls_language)');
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_language''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Linguagem (nls_language) ', sQry.FieldByName('valor')
+        .AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'AMERICAN' then
+      begin
+        AdicionarItem('Linguagem (nls_language) ',
+          'Nls_language do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_territory''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Territorio (nls_territory) ', sQry.FieldByName('valor')
+        .AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'AMERICA' then
+      begin
+        AdicionarItem('Linguagem (Nls_territory) ',
+          'Nls_territory do banco de dados, diferente de AMERICA, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_language''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Linguagem de data (nls_date_language) ',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'AMERICAN' then
+      begin
+        AdicionarItem('Linguagem (Nls_date_language) ',
+          'Nls_date_language do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_currency''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Linguagem de moeda (nls_currency ',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> '$' then
+      begin
+        AdicionarItem('Linguagem de moeda (nls_currency ',
+          'Nls_currency do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_numeric_characters''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Separadores decimais / milhar (nls_numeric_characters) ',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> '$' then
+      begin
+        AdicionarItem('Separadores decimais / milhar (nls_numeric_characters)',
+          'Nls_numeric_characters do banco de dados, diferente de .,(Ponto e Virgula), que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA, esta configuração, poderá causar problemas em cargas de cadastros',
+          clRed);
+      end;
+    end;
+
+    // if Trim(sQry.FieldByName('valor').AsString) <> '.,' then // Voltar versão oficial
+    // Checagem somente para validação.
+    // if Trim(sQry.FieldByName('valor').AsString) <> '.,' then
+    // redt1.Lines.Add('Alerta : Separadores de milhar/decimal do banco Oracle diferente do padrão TOTVS que é (,.) isso pode causar problemas de cargas, solicitar para DBA do cliente analisar ');
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_format');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Formato de data (nls_date_format) ',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'DD-MON-RR' then
+      begin
+        AdicionarItem('Separadores decimais / milhar (nls_numeric_characters)',
+          'Nls_date_format do banco de dados, diferente de DD-MON-RR, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_time_format''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Formato de hora (nls_time_format)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'HH.MI.SSXFF AM' then
+      begin
+        AdicionarItem('Nls_time_format',
+          'Nls_time_format do banco de dados, diferente de HH.MI.SSXFF AM, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_timestamp_format''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Formato de data e hora (nls_timestamp_format)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'DD-MON-RR HH.MI.SSXFF AM'
+      then
+      begin
+        AdicionarItem('nls_timestamp_format',
+          'nls_timestamp_format do banco de dados, diferente de HH.MI.SSXFF AM, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_sort''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Formato de data e hora (nls_sort)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'BINARY' then
+      begin
+        AdicionarItem('Nls_sort',
+          'Nls_sort do banco de dados, diferente de BINARY, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    // Parametros técnicos do banco de dados.
+    AdicionarItem('PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE ',
+      'PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE', clGray);
+
+    // Utilizar versão Oracle Database homologada (ver tópico Oracle Database Homologados).
+    // Utilizar character set no padrão WE8MSWIN1252.
+    // Utililizar national character set no padrão AL16UTF16.
+
+    // Melhoria
+    sQry.SQL.Add
+      ('SELECT lower(VALUE) VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_mode''');
+    sQry.open;
+    if (Trim(sQry.FieldByName('valor').AsString) <> 'choose') AND
+      (Trim(sQry.FieldByName('valor').AsString) <> 'all_rows') then
+    begin
+      AdicionarItem('Nls_sort',
+        'Parametro do banco de dados "optimizer_mode" configurado como  ' +
+        Trim(sQry.FieldByName('valor').AsString) +
+        ' padrão TOTVS =  CHOOSE ou ALL_ROWS, informar o DBA para ajuste, documentação em Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
+        clRed);
+    end;
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_sort''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Formato de data e hora (nls_sort)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'BINARY' then
+      begin
+        AdicionarItem('Nls_sort',
+          'Nls_sort do banco de dados, diferente de BINARY, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
+          clRed);
+      end;
+    end;
+
+    // Melhoria
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('SELECT a.VALUE VALOR FROM v$parameter a WHERE a.lower(NAME) = ''cursor_sharing''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Compartilhamento de cursores  (cursor_sharing)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'exact' then
+      begin
+        AdicionarItem('cursor_sharing',
+          'Parametro "cursor_sharing" do banco de dados, diferente de EXACT, que é o padrão recomendado pela TOTVs, documentação em Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
+          clRed);
+      end;
+    end;
+
+    // Melhoria
+    pb1.Position := pb1.Position + 1;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('SELECT lower(VALUE) VALOR FROM v$parameter WHERE lower(NAME) = ''result_cache_mode''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Modo de cache de resultados (result_cache_mode)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'manual' then
+      begin
+        AdicionarItem('result_cache_mode',
+          'result_cache_mode" do banco de dados, diferente de MANUAL, que é o padrão recomendado pela TOTVs',
+          clRed);
+      end;
+    end;
+
+    // Melhoria
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('SELECT VALUE VALOR FROM v$parameter WHERE lower(NAME) = ''open_cursors''');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Modo de cache de resultados (result_cache_mode)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if sQry.FieldByName('valor').AsInteger < 2000 then
+      begin
+        AdicionarItem('open_cursors',
+          'Parametro "open_cursors" do banco de dados, menor que 2000, que é o padrão recomendado pela TOTVs',
+          clRed);
+      end;
+    end;
+
+
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('SELECT VALUE VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_index_cost_adj''');
+    sQry.open;
+    s
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem
+        ('Comportamento do otimizador em relação aos indices. (optimizer_index_cost_adj))',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if sQry.FieldByName('valor').AsInteger < 2000 then
+      begin
+        AdicionarItem('optimizer_index_cost_adj',
+          'Parametro "optimizer_index_cost_adj" do banco de dados, menor que 20, que é o padrão recomendado pela TOTVs',
+          clRed);
+      end;
+    end;
+
+    redt1.SelAttributes.Style := [fsBold];
+    redt1.Lines.Add
+      ('Comportamento do otimizador em relação aos indices. (optimizer_index_cost_adj)');
+    redt1.Lines.Add(sQry.FieldByName('valor').AsString);
+    if sQry.FieldByName('valor').AsInteger < 20 then
+    begin
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Parametro "optimizer_index_cost_adj" do banco de dados, menor que 20, que é o padrão recomendado pela TOTVs');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Poderá impactar em performance do banco, solicitar para cliente verificar com seu DBA');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados');
+    end;
+    redt1.Lines.Add('  ');
+
+    // Melhoria
+    pb1.Position := pb1.Position + 1;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('SELECT VALUE VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_index_caching''');
+    sQry.open;
+    redt1.SelAttributes.Style := [fsBold];
+    redt1.Lines.Add
+      ('Comportamento do custo de otimização de junções de loops aninhados e iteradores IN-list (optimizer_index_caching)');
+    redt1.Lines.Add(sQry.FieldByName('valor').AsString);
+    if sQry.FieldByName('valor').AsInteger < 90 then
+    begin
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Parametro "optimizer_index_caching" do banco de dados, menor que 90, que é o padrão recomendado pela TOTVs');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Poderá impactar em performance do banco, solicitar para cliente verificar com seu DBA');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados');
+    end;
+    redt1.Lines.Add('  ');
+
+    // Melhoria
+    // Verifica se tabelas temporarias tem estatisticas coletadas.
+    redt1.SelAttributes.Style := [fsBold];
+    redt1.Lines.Add('Verificando coleta de estatiscas em tabelas temporarias ');
+    pb1.Position := pb1.Position + 1;
+    sQry.SQL.Clear;
+    sQry.SQL.Add
+      ('Select a.TABLE_NAME tabela,a.tablespace_name,a.LAST_ANALYZED UltAnalise From User_Tables a Where a.Temporary = ''Y'' and a.TABLE_NAME like ''TB%'' And a.Last_Analyzed Is Not Null order by 1');
+    sQry.open;
+    if sQry.RecordCount > 0 then
+    begin
+      redt1.SelAttributes.Style := [fsBold];
+      redt1.Lines.Add('Tabela       | ' + ' TableSpace     | Data de análise ');
+      while not sQry.Eof do
+      begin
+        redt1.SelAttributes.Color := clRed;
+        redt1.Lines.Add(sQry.FieldByName('tabela').AsString + ' | ' +
+          sQry.FieldByName('tablespace_name').AsString + ' | ' +
+          sQry.FieldByName('UltAnalise').AsString);
+        sQry.Next;
+      end;
+      redt1.Lines.Add('  ');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Existe(m) tabelas temporarias com estatiscas coletadas, deverá ser solicitado ao DBA do cliente para remover a coleta de estatisca destas tabelas ');
+    end
+    else
+      redt1.Lines.Add('Nenhuma tabela com estatisca coletada encontrada ');
+
+    asdfa
+
+  finally
+    FreeAndNil(sQry1);
+    FreeAndNil(sQry);
+    FreeAndNil(sListaMensagens);
+  end;
+
+end;
+
+procedure TPrincipal.SpeedButton6Click(Sender: TObject);
+begin
+  AdicionarItem('Venda Concluída', 'Pedido #1042 finalizado com sucesso.',
+    clMoneyGreen);
+  AdicionarItem('Erro no Sistema',
+    'Falha de integração com o serviço fiscal.', clRed);
+  AdicionarItem('Em Andamento', 'Processamento do lote 07 ainda em execução.',
+    clYellow);
+  AdicionarItem('Finalizado', 'Rotina encerrada e recursos liberados.', clAqua);
+end;
+
+function TPrincipal.TamanhoDiretorio(Dir: string): Integer;
+var
+  SearchRec: TSearchRec;
+  Separator: string;
+
+begin
+  Result := 0;
+  DirBytes := 0;
+  if Copy(Dir, Length(Dir), 1) = '\' then
+    Separator := ''
+  else
+    Separator := '\';
+  if FindFirst(Dir + Separator + '*.*', faAnyFile, SearchRec) = 0 then
+  begin
+    if FileExists(Dir + Separator + SearchRec.Name) then
+    begin
+      DirBytes := DirBytes + SearchRec.Size;
+    end
+    else if DirectoryExists(Dir + Separator + SearchRec.Name) then
+    begin
+      if (SearchRec.Name <> '.') and (SearchRec.Name <> '..') then
+      begin
+        TamanhoDiretorio(Dir + Separator + SearchRec.Name);
+      end;
+
+    end;
+
+    while FindNext(SearchRec) = 0 do
+    begin
+      if FileExists(Dir + Separator + SearchRec.Name) then
+      begin
+        DirBytes := DirBytes + SearchRec.Size;
+      end
+      else if DirectoryExists(Dir + Separator + SearchRec.Name) then
+      begin
+        if (SearchRec.Name <> '.') and (SearchRec.Name <> '..') then
+        begin
+          TamanhoDiretorio(Dir + Separator + SearchRec.Name);
+        end;
+      end;
+    end;
+  end;
+  FindClose(SearchRec);
+  Result := DirBytes;
+end;
+
+function TPrincipal.TestaConexao(sIP: string; nPorta: Integer): string;
+begin
+  // try
+  Result := 'Sucesso na conexão telnet';
+  try
+    // Colocar combo box para digitar a porta
+    IdTCPClient1.Port := nPorta;
+    IdTCPClient1.Host := sIP;
+    IdTCPClient1.Connect;
+    // RdtConectividade.Lines.Add('Conexão telnet realizada com sucesso ! ');
+    // IdTCPClient1.IOHandler.WriteLn('teste'); // Envia mensagem
+    // Response := IdTCPClient1.IOHandler.ReadLn; // Lê resposta do servidor
+    // RdtConectividade.Lines.Add('Resposta do servidor: ' + Response);
+    IdTCPClient1.Disconnect;
+  except
+    on E: Exception do
+    begin
+      Result := 'Falha ao conectar telnet ' + E.Message;
+      { if PGCPrincipal.ActivePage = tabPrincipal then
+        redt1.SelAttributes.Color := clRed
+        else if PGCPUtil.ActivePage = TabAnalise then
+        RdtConectividade.SelAttributes.Color := clRed;
+      }
+    end;
+  end;
+end;
+
+function TPrincipal.ValidarInfraestrutura(pdv, cpu, disco: Integer;
+  memoria: Double): Boolean;
+begin
+  var
+    minCPU, minMemoria, minDisco: Integer;
+
+  begin
+    Result := False;
+
+    // memoria := FormatFloat('0', memoria);
+
+    // 1. Identifica faixa
+    if (pdv >= 1) and (pdv <= 100) then
+    begin
+      minCPU := 6;
+      minMemoria := 4;
+      minDisco := 128;
+    end
+    else if (pdv <= 200) then
+    begin
+      minCPU := 8;
+      minMemoria := 8;
+      minDisco := 256;
+    end
+    else if (pdv <= 600) then
+    begin
+      minCPU := 16;
+      minMemoria := 16;
+      minDisco := 512;
+    end
+    else if (pdv <= 1000) then
+    begin
+      minCPU := 24;
+      minMemoria := 16;
+      minDisco := 1024;
+    end
+    else if (pdv <= 1500) then
+    begin
+      minCPU := 32;
+      minMemoria := 24;
+      minDisco := 1024;
+    end
+    else if (pdv <= 2000) then
+    begin
+      minCPU := 48;
+      minMemoria := 32;
+      minDisco := 1536;
+    end
+    else
+      Exit; // fora da regra
+
+    // 2. Validação final (REGRA PRINCIPAL)
+    Result := (cpu >= minCPU) and (memoria >= minMemoria) and
+      (disco >= minDisco);
+  end;
+
+end;
+
+function TPrincipal.VerificaEstrutura: Boolean;
+var
+  sListaDiretorio, sListaArquivos, sListaErros: TStringList;
+  i, x: Integer;
+begin
+  x := 0;
+  i := 0;
+  Try
+
+    sListaDiretorio := TStringList.Create;
+    sListaDiretorio.Clear;
+
+    sListaArquivos := TStringList.Create;
+    sListaArquivos.Clear;
+
+    sListaDiretorio.Add(sUnidade + 'C5Client');
+    sListaDiretorio.Add(sUnidade + 'C5Client\Acruxmonitor');
+    sListaDiretorio.Add(sUnidade + 'C5Client\Acruxmonitor\Services');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\cache\input');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\cache\output');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\cache\deploy');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\Services\documento');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\cf-e');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\cf-e\backup');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\ibpt');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\backup');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\cancelada');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\certificado');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\correcao');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\dpec');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\evento');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\gerada');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\importado');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\inutilizada');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\log');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\naoimportado');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\nf-e\schemas');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\documento\paf');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\Services\log');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\log\aplicacao');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\cs');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\de');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\es');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\fr');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\it');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\ja');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\ko');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\pl');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\pt-BR');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\Release');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\Reports');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\ru');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\alpine-x64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\alpine-x64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux\lib');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux\lib\netcoreapp3.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-arm');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-arm\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-arm64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-arm64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-armel');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-armel\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-mips64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-mips64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-musl-x64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-musl-x64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-x64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-x64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-x86');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\linux-x86\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\osx');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\osx\lib');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\osx\lib\netcoreapp3.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\osx-x64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\osx-x64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\unix');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\unix\lib');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\unix\lib\netcoreapp2.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\unix\lib\netcoreapp3.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win\lib');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win\lib\netcoreapp2.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win\lib\netcoreapp3.1');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win\lib\netstandard2.0');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-arm');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-arm\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-arm64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-arm64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-x64');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-x64\native');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-x86');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\runtimes\win-x86\native');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\API\tr');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\zh-Hans');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\API\zh-Hant');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\Page');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\MonitorPDV\Site');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\assets');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\assets\data');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\assets\images');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\assets\images\favicons');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\assets\images\logos');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\MonitorPDV\Site\Release');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\WebServices');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\WebServices\files');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\WebServices\log');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\WebServices\log\aplicacao');
+    sListaDiretorio.Add(sUnidade +
+      'C5Client\AcruxMonitor\WebServices\log\isapiacruxmonitor_dll');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxMonitor\WebServices');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxUpdate');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxUpdate\CacheInput');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxUpdate\Data');
+    sListaDiretorio.Add(sUnidade + 'C5Client\AcruxUpdate\Log');
+    sListaDiretorio.Add(sUnidade + 'C5Client\IntegracaoRMS');
+    sListaDiretorio.Add(sUnidade + 'C5Client\IntegracaoRMS\nginx');
+    sListaDiretorio.Add(sUnidade + 'C5Client\IntegracaoRMS\nginx\html');
+    sListaDiretorio.Add(sUnidade + 'C5Client\IntegracaoRMS\nginx\html\assets');
+
+    // Arquivos
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\WebServices\ISAPIAcruxMonitor.dll');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\WebServices\ISAPIMonitor.dll');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxDFePainel.exe');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxDFeTools.exe');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxMonitorMobileService.exe');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxMonitorService.Cancela.exe');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxMonitorService.Cancela.ini');
+    sListaArquivos.Add(sUnidade +
+      '\C5Client\AcruxMonitor\Services\AcruxMonitorService.exe');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxMonitorService.MicroTerminal');
+    sListaArquivos.Add(sUnidade +
+      'C5Client\AcruxMonitor\Services\AcruxMonitorService_timeoutnfe.exe');
+    sListaArquivos.Add(sUnidade + 'C5Client\AcruxMonitor\Services\pmtg.dll');
+    sListaArquivos.Add(sUnidade + 'C5Client\IntegracaoRMS\IntegracaoRMS.exe');
+    sListaArquivos.Add(sUnidade + 'C5Client\AcruxUpdate\AcruxUpdate.exe');
+
+    for i := 0 to sListaDiretorio.Count - 1 do
+      if not DirectoryExists(sListaDiretorio[i]) then
+      begin
+        MemoResult.Lines.Add('Diretório não encontrado : ' +
+          sListaDiretorio[i]);
+      end;
+
+    for x := 0 to sListaArquivos.Count - 1 do
+      if not FileExists(sListaArquivos[x]) then
+      begin
+        MemoResult.Lines.Add('Diretório não encontrado : ' +
+          sListaDiretorio[x]);
+      end;
+
+  Finally
+    if (sListaArquivos.Count > 0) or (sListaDiretorio.Count > 0) then
+      // AdicionarItem('Verificando estrutura de arquivos / diretórios', clRed)
+    else
+      // AdicionarItem('Verificando estrutura de arquivos / diretórios',
+      // clMoneyGreen);
+
+      FreeAndNil(sListaDiretorio);
+    FreeAndNil(sListaArquivos);
+  End;
+end;
+
+function TPrincipal.EncontrarUnidadeAcrux: string;
+var
+  Drive: char;
+  Caminho: string;
+begin
+  Result := 'não encontrado';
+
+  for Drive := 'A' to 'Z' do
+  begin
+    // Verifica se a unidade existe
+    if GetDriveType(PChar(Drive + ':\')) <> DRIVE_NO_ROOT_DIR then
+    begin
+      Caminho := Drive +
+        ':\C5Client\AcruxMonitor\Services\Acruxmonitorservice.exe';
+
+      if FileExists(Caminho) then
+      begin
+        Result := Drive + ':';
+        Exit;
+      end;
+    end;
+  end;
+end;
+
+function TPrincipal.EspacoEmDiscoLivre: Int64;
+var
+  AmtFree: Int64;
+begin
+  AmtFree := DiskFree(0);
+  Result := ((AmtFree div 1024) div 1024) div 1024; // GB
+end;
+
+procedure TPrincipal.ParseTNS;
+var
+  slTemp: TStringList;
+  sPath, sTemp: string;
+  i: Integer;
+begin
+  // https://stackoverflow.com/questions/7039492/how-i-can-parse-a-tnsnames-ora-file-from-delphi
+  slTemp := TStringList.Create;
+  slTNSConfig := TStringList.Create;
+  try
+    sPath := GetTNSNamesPath;
+    if (Length(sPath) < 33) or (not FileExists(sPath)) then
+      messageDlg('tnsnames.ora not found.', mtError, [mbOk], 0)
+    else
+    begin
+      slTemp.LoadFromFile(sPath); // Load tnsnames.ora
+      sTemp := StringReplace(StringReplace(UpperCase(slTemp.Text), ' ', '',
+        [rfReplaceAll]), ')', '', [rfReplaceAll]);
+      // delete ')' and spaces
+      slTemp.Clear;
+      slTemp.Delimiter := '(';
+      slTemp.DelimitedText := sTemp;
+      // parse like  Name=Value
+      sTemp := '';
+      for i := 0 to slTemp.Count - 1 do
+      begin
+        if pos('DESCRIPTION', slTemp[i]) = 1 then
+        // Get Name before description
+        begin
+          sTemp := StringReplace(slTemp[i - 1], '=', '', [rfReplaceAll]);
+          cbxDataBase.Items.Add(sTemp); // Fill combobox
+        end;
+        if Length(slTemp.ValueFromIndex[i]) > 0 then
+          // Get filled Name=Value
+          slTNSConfig.Add(sTemp + '_' + slTemp[i]);
+        // Fill TNS config like TNS_HOST=Value
+      end;
+      cbxDataBase.Sorted := true;
+    end;
+  finally
+    slTemp.Free;
+  end;
+end;
+
+function TPrincipal.ProcurarValorRegistro(RootKey: HKEY;
+  ChaveAtual, ValorProcurado: string): TStringList;
+var
+  Reg: TRegistry;
+  SubKeys: TStringList;
+  i, r: Integer;
+begin
+  Reg := TRegistry.Create(KEY_READ);
+  SubKeys := TStringList.Create;
+  // sResult.Clear;
+  try
+    Reg.RootKey := RootKey;
+
+    if Reg.OpenKeyReadOnly(ChaveAtual) then
+    begin
+      // Verifica se o valor existe nesta chave
+      if Reg.ValueExists(ValorProcurado) then
+      begin
+        if Trim(ChaveAtual) <> '' then
+        begin
+          r := pos(UpperCase('CONSINCO'), UpperCase(ChaveAtual));
+          if r <> 0 then
+            if Trim(sUsuarioConsinco) = '' then
+              sUsuarioConsinco := LowerCase(Reg.ReadString('User'));
+
+          r := pos(UpperCase('CONSINCOMONITOR'), UpperCase(ChaveAtual));
+          if r <> 0 then
+            if Trim(sUsuarioConsincoMonitor) = '' then
+              sUsuarioConsincoMonitor := LowerCase(Reg.ReadString('User'));
+
+        end;
+      end;
+
+      // Lista subchaves e percorre
+
+      if (Trim(sUsuarioConsinco) = '') or (Trim(sUsuarioConsincoMonitor) = '')
+      then
+      begin
+        Reg.GetKeyNames(SubKeys);
+        for i := 0 to SubKeys.Count - 1 do
+        begin
+          // Ignora chaves do sistema
+          if (SubKeys[i] <> '.') and (SubKeys[i] <> '..') then
+          begin
+            ProcurarValorRegistro(RootKey, ChaveAtual + '\' + SubKeys[i],
+              ValorProcurado);
+            // showmessage('aaa');
+          end;
+        end;
+        Reg.CloseKey;
+      end;
+    end;
+  finally
+    Reg.Free;
+    SubKeys.Free;
+    Result := sResult;
+    // FreeAndNil(sResult);
+  end;
+end;
+
+procedure TPrincipal.AtivaPage(APageControl: TPageControl; APage: TTabSheet);
+var
+  i: Integer;
+begin
+  for i := 0 to APageControl.PageCount - 1 do
+    APageControl.Pages[i].TabVisible := False;
+
+  if Assigned(APage) then
+  begin
+    APage.TabVisible := true;
+    APageControl.ActivePage := APage;
+  end;
+end;
+
+procedure TPrincipal.btnConectarClick(Sender: TObject);
+begin
+  try
+    try
+      if Trim(cbxDataBase.Text) = '' then
+      begin
+        application.MessageBox(PChar('Escolha o banco de dados '), 'Atenção',
+          MB_OK + MB_ICONERROR);
+        abort;
+      end;
+      dm.fdc.Params.Database := Trim(cbxDataBase.Text);
+      dm.fdc.Params.UserName := Trim(edtUsuario.Text);
+      dm.fdc.Params.Password := Trim(edtSenha.Text);
+      if (Trim(edtUsuario.Text) <> '') and (Trim(edtSenha.Text) <> '') then
+        dm.fdc.Connected := true
+      else
+      begin
+        application.MessageBox(PChar('Digite o usuário e senha !'), 'Atenção',
+          MB_OK + MB_ICONERROR);
+        abort;
+      end;
+
+      // Caso não seja possivel identificar o usuario do banco, assume CONSINCO / e o que for digitado no text box do usuario
+      // Remover
+      if Trim(sUsuarioConsincoMonitor) = '' then
+        sUsuarioConsincoMonitor := Trim(edtUsuario.Text);
+
+      if Trim(sUsuarioConsinco) = '' then
+        sUsuarioConsinco := 'CONSINCO2';
+
+      pnLateral.Enabled := true;
+      AtivaPage(pgPrincipal, TabAnalise);
+    except
+      on E: Exception do
+      begin
+        application.MessageBox(PChar('Erro ao conectar banco de dados : ' +
+          E.Message), 'Atenção', MB_OK + MB_ICONERROR);
+        abort;
+      end;
+    end;
+  finally
+  end;
+end;
+
+function TPrincipal.iif<T>(Condicao: Boolean; Verdadeiro, Falso: T): T;
+begin
+  if Condicao then
+    Result := Verdadeiro
+  else
+    Result := Falso;
+end;
+
+end.
