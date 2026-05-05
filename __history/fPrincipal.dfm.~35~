@@ -26,7 +26,7 @@ object Principal: TPrincipal
     BevelOuter = bvLowered
     Enabled = False
     TabOrder = 0
-    ExplicitHeight = 661
+    ExplicitHeight = 653
     object SpeedButton1: TSpeedButton
       Left = 5
       Top = 9
@@ -75,8 +75,8 @@ object Principal: TPrincipal
     BevelInner = bvRaised
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 808
-    ExplicitHeight = 661
+    ExplicitWidth = 806
+    ExplicitHeight = 653
     object pgPrincipal: TPageControl
       Left = 2
       Top = 2
@@ -85,6 +85,8 @@ object Principal: TPrincipal
       ActivePage = tabLogin
       Align = alClient
       TabOrder = 0
+      ExplicitWidth = 802
+      ExplicitHeight = 649
       object TabAnalise: TTabSheet
         Caption = 'tabAnalise'
         object LstPrincipal: TListBox
@@ -196,5 +198,12 @@ object Principal: TPrincipal
         end
       end
     end
+  end
+  object IdTCPClient1: TIdTCPClient
+    ConnectTimeout = 0
+    Port = 0
+    ReadTimeout = -1
+    Left = 104
+    Top = 578
   end
 end

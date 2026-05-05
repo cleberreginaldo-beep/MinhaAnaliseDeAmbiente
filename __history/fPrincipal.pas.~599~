@@ -1331,10 +1331,22 @@ begin
     begin
       AdicionarItem('Modo de cache de resultados (result_cache_mode)',
         sQry.FieldByName('valor').AsString, clMoneyGreen);
+      if Trim(sQry.FieldByName('valor').AsString) <> 'exact' then
+      begin
+        AdicionarItem('cursor_sharing',
+          'Parametro "cursor_sharing" do banco de dados, diferente de EXACT, que é o padrão recomendado pela TOTVs, documentação em Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
+          clRed);
+      end;
+    end;
+
+    if sQry.RecordCount > 0 then
+    begin
+      AdicionarItem('Modo de cache de resultados (result_cache_mode)',
+        sQry.FieldByName('valor').AsString, clMoneyGreen);
       if Trim(sQry.FieldByName('valor').AsString) <> 'manual' then
       begin
         AdicionarItem('result_cache_mode',
-          'result_cache_mode" do banco de dados, diferente de MANUAL, que é o padrão recomendado pela TOTVs',
+          'Parametro "result_cache_mode" do banco de dados, diferente de MANUAL, que é o padrão recomendado pela TOTVs',
           clRed);
       end;
     end;
@@ -1356,22 +1368,42 @@ begin
       end;
     end;
 
+    // Melhoria
     sQry.SQL.Clear;
     sQry.SQL.Add
       ('SELECT VALUE VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_index_cost_adj''');
     sQry.open;
+    s
     if sQry.RecordCount > 0 then
     begin
       AdicionarItem
-        ('Comportamento do otimizador em relação aos indices. (optimizer_index_cost_adj)',
+        ('Comportamento do otimizador em relação aos indices. (optimizer_index_cost_adj))',
         sQry.FieldByName('valor').AsString, clMoneyGreen);
       if sQry.FieldByName('valor').AsInteger < 2000 then
       begin
         AdicionarItem('optimizer_index_cost_adj',
-          'Parametro "optimizer_index_cost_adj" do banco de dados, menor que 2000, que é o padrão recomendado pela TOTVs',
+          'Parametro "optimizer_index_cost_adj" do banco de dados, menor que 20, que é o padrão recomendado pela TOTVs',
           clRed);
       end;
     end;
+
+    redt1.SelAttributes.Style := [fsBold];
+    redt1.Lines.Add
+      ('Comportamento do otimizador em relação aos indices. (optimizer_index_cost_adj)');
+    redt1.Lines.Add(sQry.FieldByName('valor').AsString);
+    if sQry.FieldByName('valor').AsInteger < 20 then
+    begin
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Parametro "optimizer_index_cost_adj" do banco de dados, menor que 20, que é o padrão recomendado pela TOTVs');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Poderá impactar em performance do banco, solicitar para cliente verificar com seu DBA');
+      redt1.SelAttributes.Color := clRed;
+      redt1.Lines.Add
+        ('Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados');
+    end;
+    redt1.Lines.Add('  ');
 
     // Melhoria
     pb1.Position := pb1.Position + 1;

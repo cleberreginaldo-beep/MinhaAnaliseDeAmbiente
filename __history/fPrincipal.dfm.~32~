@@ -16,7 +16,7 @@ object Principal: TPrincipal
   OnActivate = FormActivate
   OnCreate = FormCreate
   TextHeight = 13
-  object Panel1: TPanel
+  object pnLateral: TPanel
     Left = 0
     Top = 0
     Width = 66
@@ -24,6 +24,7 @@ object Principal: TPrincipal
     Align = alLeft
     BevelInner = bvRaised
     BevelOuter = bvLowered
+    Enabled = False
     TabOrder = 0
     ExplicitHeight = 661
     object SpeedButton1: TSpeedButton
@@ -119,6 +120,16 @@ object Principal: TPrincipal
         Caption = 'Login'
         ImageIndex = 3
         ImageName = 'TabLogin'
+        object Label1: TLabel
+          Left = 128
+          Top = 416
+          Width = 461
+          Height = 13
+          Caption = 
+            'Remover daqui, N'#195'O ESQUECER, pois este usuario tem que vir da fu' +
+            'n'#231#227'o ProcurarValorRegistro'
+          Visible = False
+        end
         object GroupBox1: TGroupBox
           Left = 208
           Top = 162
@@ -185,5 +196,12 @@ object Principal: TPrincipal
         end
       end
     end
+  end
+  object IdTCPClient1: TIdTCPClient
+    ConnectTimeout = 0
+    Port = 0
+    ReadTimeout = -1
+    Left = 104
+    Top = 578
   end
 end

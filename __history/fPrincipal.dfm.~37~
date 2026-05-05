@@ -16,7 +16,7 @@ object Principal: TPrincipal
   OnActivate = FormActivate
   OnCreate = FormCreate
   TextHeight = 13
-  object Panel1: TPanel
+  object pnLateral: TPanel
     Left = 0
     Top = 0
     Width = 66
@@ -24,8 +24,9 @@ object Principal: TPrincipal
     Align = alLeft
     BevelInner = bvRaised
     BevelOuter = bvLowered
+    Enabled = False
     TabOrder = 0
-    ExplicitHeight = 661
+    ExplicitHeight = 653
     object SpeedButton1: TSpeedButton
       Left = 5
       Top = 9
@@ -74,8 +75,8 @@ object Principal: TPrincipal
     BevelInner = bvRaised
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 808
-    ExplicitHeight = 661
+    ExplicitWidth = 806
+    ExplicitHeight = 653
     object pgPrincipal: TPageControl
       Left = 2
       Top = 2
@@ -84,6 +85,8 @@ object Principal: TPrincipal
       ActivePage = tabLogin
       Align = alClient
       TabOrder = 0
+      ExplicitWidth = 802
+      ExplicitHeight = 649
       object TabAnalise: TTabSheet
         Caption = 'tabAnalise'
         object LstPrincipal: TListBox
@@ -119,6 +122,16 @@ object Principal: TPrincipal
         Caption = 'Login'
         ImageIndex = 3
         ImageName = 'TabLogin'
+        object Label1: TLabel
+          Left = 128
+          Top = 416
+          Width = 461
+          Height = 13
+          Caption = 
+            'Remover daqui, N'#195'O ESQUECER, pois este usuario tem que vir da fu' +
+            'n'#231#227'o ProcurarValorRegistro'
+          Visible = False
+        end
         object GroupBox1: TGroupBox
           Left = 208
           Top = 162
@@ -173,16 +186,24 @@ object Principal: TPrincipal
             ImeName = 'Portuguese (Brazilian ABNT)'
             TabOrder = 2
           end
-          object Button1: TButton
+          object btnConectar: TButton
             Left = 136
             Top = 136
             Width = 75
             Height = 25
             Caption = 'Conectar'
             TabOrder = 3
+            OnClick = btnConectarClick
           end
         end
       end
     end
+  end
+  object IdTCPClient1: TIdTCPClient
+    ConnectTimeout = 0
+    Port = 0
+    ReadTimeout = -1
+    Left = 104
+    Top = 578
   end
 end
