@@ -48,7 +48,6 @@ type
     procedure FormCreate(Sender: TObject);
     procedure LstPrincipalDrawItem(Control: TWinControl; Index: Integer;
       Rect: TRect; State: TOwnerDrawState);
-    procedure SpeedButton6Click(Sender: TObject);
     function VerificaEstrutura: Boolean;
     function EncontrarUnidadeAcrux: string;
     function EspacoEmDiscoLivre(): Int64;
@@ -227,14 +226,20 @@ begin
     Qry.Connection := dm.fdc;
     Qry.SQL.Clear;
 
-    { sQry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
-      '.fn_getparametromonitor(''Geral'',''IntegracaoConsinco'')),''S'',''SIM'',''NAO'') IntegradoERP from dual');
-    }
+    Qry.SQL.Add('select case ' + ' when valor = ''S'' then ''SIM''' +
+      ' when valor = ''N'' then ''NAO''' + ' else valor ' + ' end as retorno ' +
+      ' from ( ' + '    select to_char(monitorpdv.fn_getparametromonitor(' +
+      QuotedStr(pGrupo) + ',' + QuotedStr(pParam) + ')) valor' +
+      '    from dual) ');
+    Qry.open;
 
-    Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
+    { Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
       '.fn_getparametromonitor(' + QuotedStr(pGrupo) + ',' + QuotedStr(pParam) +
       ')),''S'',''SIM'',''NAO'') Retorno from dual');
-    Qry.open;
+      Qry.open;
+      showmessage(Qry.SQL.Text);
+    }
+
     Result := Qry.FieldByName('Retorno').AsString;
 
   finally
@@ -404,6 +409,8 @@ Var
   sListaMensagens: TStringList;
   nPortaServidor, nTamanhoInput, nTamanhoOutput, a, nContErro: Integer;
   Retorno: String;
+  TempoInicial: TDateTime;
+
 begin
   try
     a := 0;
@@ -412,6 +419,8 @@ begin
     nTamanhoInput := 0;
     nTamanhoOutput := 0;
     nContErro := 0;
+    TempoInicial := Time();
+
     sListaMensagens := TStringList.Create;
     sListaMensagens.Clear;
 
@@ -542,6 +551,7 @@ begin
     AdicionarItem('Integração Consinco ? : ' + Retorno, 'Integração Consinco',
       CorParametro(Retorno));
 
+    // cleber
     Retorno := GetParametroMonitor('Geral', 'Integracao');
     AdicionarItem('Tipo de integração : ' + Retorno, 'Tipo de integração ',
       CorParametro(Retorno));
@@ -731,11 +741,11 @@ begin
         // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 3 ');
         while not sQry.Eof do
         begin
-          sQry.SQL.Clear;
-          sQry.SQL.Add('select 1 qtde from ' + sUsuarioConsincoMonitor + '.' +
+          sQry1.SQL.Clear;
+          sQry1.SQL.Add('select 1 qtde from ' + sUsuarioConsincoMonitor + '.' +
             sQry.FieldByName('tabela').AsString);
-          sQry.open;
-          if sQry.RecordCount > 0 then
+          sQry1.open;
+          if sQry1.RecordCount > 0 then
           begin
             sListaMensagens.Add('Falha de carga encontrada na tabela : ' +
               sQry.FieldByName('tabela').AsString);
@@ -874,8 +884,7 @@ begin
       end;
     end;
     if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Log Monitor : ', sListaMensagens.Text,
-        CorParametro(Retorno));
+      AdicionarItem('Log Monitor : ', sListaMensagens.Text, clRed);
 
     // redt1.Lines.Add
     // ('Verificando logs de falha de exportação do  monitor (-3 dias)');
@@ -1468,20 +1477,15 @@ begin
         clMoneyGreen)
     else
       AdicionarItem('Atenção: Interface de rede em 1 Gbps, OK!',
-        'Atenção: Interface de rede em 1 Gbps, OK!', clMoneyGreen)
+        'Atenção: Interface de rede em 1 Gbps, OK!', clMoneyGreen);
 
-      { redt1.Lines.Add('  '); pb1.Position := pb1.Position + 1;
-        redt1.SelAttributes.Style := [fsBold];
-        redt1.SelAttributes.Color := clBlue;
-        redt1.Lines.Add('Verificando informações de rede');
-        if not VerificarLinkSpeed then begin redt1.SelAttributes.Color := clRed;
-        redt1.Lines.Add
-        ('Atenção: Interface de rede não está em 1 Gbps, isso poderá causar instabiliades no servidor, ajustar para 1 Gbps !');
-        end else redt1.Lines.Add('Interface de rede está em 1 Gbps - OK');
-      }
+    AdicionarItem('Análises que também devem ser realizadas ',
+      'Configurar o serviço do servidor de PDVs para logar como Adminstrador local da máquina /  Avaliar o log de eventos do Windows / Link de documentação do checklist PDV : https://tdn.totvs.com/pages/viewpage.action?pageId=904036675',
+      clMoneyGreen);
 
-
-ASDFASDF
+    AdicionarItem(' Total análises : ',
+      'analises realizadas(99) , Tempo total :' +
+      TimeToStr(Time() - TempoInicial) + ' segundos', clMoneyGreen);
 
   finally
     FreeAndNil(sQry1);
@@ -1489,17 +1493,6 @@ ASDFASDF
     FreeAndNil(sListaMensagens);
   end;
 
-end;
-
-procedure TPrincipal.SpeedButton6Click(Sender: TObject);
-begin
-  AdicionarItem('Venda Concluída', 'Pedido #1042 finalizado com sucesso.',
-    clMoneyGreen);
-  AdicionarItem('Erro no Sistema',
-    'Falha de integração com o serviço fiscal.', clRed);
-  AdicionarItem('Em Andamento', 'Processamento do lote 07 ainda em execução.',
-    clYellow);
-  AdicionarItem('Finalizado', 'Rotina encerrada e recursos liberados.', clAqua);
 end;
 
 function TPrincipal.TamanhoDiretorio(Dir: string): Integer;
@@ -1902,7 +1895,8 @@ var
   ExitCode: DWORD;
   Retorno: string;
 begin
-  Result := true; // Default seguro (ajuste conforme regra de negócio)
+  Result := true;
+  // Default seguro (ajuste conforme regra de negócio)
 
   Cmd := 'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ' +
     '"if (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue) {' +

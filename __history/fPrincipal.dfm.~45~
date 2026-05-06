@@ -63,7 +63,6 @@ object Principal: TPrincipal
       Top = 286
       Width = 55
       Height = 50
-      OnClick = SpeedButton6Click
     end
   end
   object Panel2: TPanel

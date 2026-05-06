@@ -226,14 +226,20 @@ begin
     Qry.Connection := dm.fdc;
     Qry.SQL.Clear;
 
-    { sQry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
-      '.fn_getparametromonitor(''Geral'',''IntegracaoConsinco'')),''S'',''SIM'',''NAO'') IntegradoERP from dual');
-    }
+    Qry.SQL.Add('select case ' + ' when valor = ''S'' then ''SIM''' +
+      ' when valor = ''N'' then ''NAO''' + ' else valor ' + ' end as retorno ' +
+      ' from ( ' + '    select to_char(monitorpdv.fn_getparametromonitor(' +
+      QuotedStr(pGrupo) + ',' + QuotedStr(pParam) + ')) valor' +
+      '    from dual) ');
+    Qry.open;
 
-    Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
+    { Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
       '.fn_getparametromonitor(' + QuotedStr(pGrupo) + ',' + QuotedStr(pParam) +
       ')),''S'',''SIM'',''NAO'') Retorno from dual');
-    Qry.open;
+      Qry.open;
+      showmessage(Qry.SQL.Text);
+    }
+
     Result := Qry.FieldByName('Retorno').AsString;
 
   finally
@@ -545,6 +551,7 @@ begin
     AdicionarItem('Integração Consinco ? : ' + Retorno, 'Integração Consinco',
       CorParametro(Retorno));
 
+    // cleber
     Retorno := GetParametroMonitor('Geral', 'Integracao');
     AdicionarItem('Tipo de integração : ' + Retorno, 'Tipo de integração ',
       CorParametro(Retorno));
@@ -734,11 +741,11 @@ begin
         // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 3 ');
         while not sQry.Eof do
         begin
-          sQry.SQL.Clear;
-          sQry.SQL.Add('select 1 qtde from ' + sUsuarioConsincoMonitor + '.' +
+          sQry1.SQL.Clear;
+          sQry1.SQL.Add('select 1 qtde from ' + sUsuarioConsincoMonitor + '.' +
             sQry.FieldByName('tabela').AsString);
-          sQry.open;
-          if sQry.RecordCount > 0 then
+          sQry1.open;
+          if sQry1.RecordCount > 0 then
           begin
             sListaMensagens.Add('Falha de carga encontrada na tabela : ' +
               sQry.FieldByName('tabela').AsString);
@@ -877,8 +884,7 @@ begin
       end;
     end;
     if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Log Monitor : ', sListaMensagens.Text,
-        CorParametro(Retorno));
+      AdicionarItem('Log Monitor : ', sListaMensagens.Text, clRed);
 
     // redt1.Lines.Add
     // ('Verificando logs de falha de exportação do  monitor (-3 dias)');
@@ -1208,7 +1214,7 @@ begin
 
     sQry.SQL.Clear;
     sQry.SQL.Add
-      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_format');
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_format''');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
@@ -1280,6 +1286,7 @@ begin
     // Utililizar national character set no padrão AL16UTF16.
 
     // Melhoria
+    sQry.SQL.Clear;
     sQry.SQL.Add
       ('SELECT lower(VALUE) VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_mode''');
     sQry.open;
@@ -1312,7 +1319,7 @@ begin
     // Melhoria
     sQry.SQL.Clear;
     sQry.SQL.Add
-      ('SELECT a.VALUE VALOR FROM v$parameter a WHERE a.lower(NAME) = ''cursor_sharing''');
+      ('SELECT a.VALUE VALOR FROM v$parameter a WHERE lower(NAME) = ''cursor_sharing''');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
