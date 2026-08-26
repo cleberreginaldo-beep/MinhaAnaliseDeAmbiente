@@ -12,9 +12,11 @@ object Principal: TPrincipal
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  KeyPreview = True
   Position = poDesktopCenter
   OnActivate = FormActivate
   OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
   TextHeight = 13
   object pnLateral: TPanel
     Left = 0
@@ -29,14 +31,14 @@ object Principal: TPrincipal
     ExplicitHeight = 653
     object SpeedButton1: TSpeedButton
       Left = 5
-      Top = 9
+      Top = 8
       Width = 55
       Height = 50
       OnClick = SpeedButton1Click
     end
     object SpeedButton2: TSpeedButton
       Left = 5
-      Top = 65
+      Top = 64
       Width = 55
       Height = 50
     end

@@ -12,9 +12,11 @@ object Principal: TPrincipal
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  KeyPreview = True
   Position = poDesktopCenter
   OnActivate = FormActivate
   OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
   TextHeight = 13
   object pnLateral: TPanel
     Left = 0
@@ -26,7 +28,7 @@ object Principal: TPrincipal
     BevelOuter = bvLowered
     Enabled = False
     TabOrder = 0
-    ExplicitHeight = 653
+    ExplicitHeight = 661
     object SpeedButton1: TSpeedButton
       Left = 5
       Top = 9
@@ -36,7 +38,7 @@ object Principal: TPrincipal
     end
     object SpeedButton2: TSpeedButton
       Left = 5
-      Top = 65
+      Top = 64
       Width = 55
       Height = 50
     end
@@ -63,7 +65,6 @@ object Principal: TPrincipal
       Top = 286
       Width = 55
       Height = 50
-      OnClick = SpeedButton6Click
     end
   end
   object Panel2: TPanel
@@ -75,8 +76,8 @@ object Principal: TPrincipal
     BevelInner = bvRaised
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 806
-    ExplicitHeight = 653
+    ExplicitWidth = 808
+    ExplicitHeight = 661
     object pgPrincipal: TPageControl
       Left = 2
       Top = 2
@@ -85,8 +86,8 @@ object Principal: TPrincipal
       ActivePage = tabLogin
       Align = alClient
       TabOrder = 0
-      ExplicitWidth = 802
-      ExplicitHeight = 649
+      ExplicitWidth = 804
+      ExplicitHeight = 657
       object TabAnalise: TTabSheet
         Caption = 'tabAnalise'
         object LstPrincipal: TListBox

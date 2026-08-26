@@ -12,9 +12,11 @@ object Principal: TPrincipal
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  KeyPreview = True
   Position = poDesktopCenter
   OnActivate = FormActivate
   OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
   TextHeight = 13
   object pnLateral: TPanel
     Left = 0

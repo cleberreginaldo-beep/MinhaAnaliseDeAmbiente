@@ -66,6 +66,7 @@ type
     function CorParametro(Valor: String): TColor;
     function TamanhoDiretorio(Dir: string): Integer;
     function VerificarLinkSpeed: Boolean;
+    function ValorNaoNulo(const A, B: string): string;
 
     procedure SpeedButton1Click(Sender: TObject);
     procedure LstPrincipalClick(Sender: TObject);
@@ -74,6 +75,7 @@ type
     procedure ParseTNS;
     procedure AtivaPage(APageControl: TPageControl; APage: TTabSheet);
     procedure btnConectarClick(Sender: TObject);
+    procedure FormKeyPress(Sender: TObject; var Key: Char);
 
   private
     { Private declarations }
@@ -149,9 +151,8 @@ begin
   sEmpresaPDVs.Clear;
 
   // Carrega usuários lidos do Registrod o Windows do banco de dados :   sUsuarioConsinco /  sUsuarioConsincoMonitor;
-
   // Desativado temporariamente, voltar
-  // ProcurarValorRegistro(HKEY_LOCAL_MACHINE, '', 'Db').Text;
+  ProcurarValorRegistro(HKEY_LOCAL_MACHINE, '', 'Db').Text;
 
   // TabLogin.TabVisible := False;
   // PGCPrincipal.ActivePage := TabLogin;
@@ -175,6 +176,15 @@ begin
   MemoResult.Clear;
 
   sUnidade := EncontrarUnidadeAcrux + '\';
+end;
+
+procedure TPrincipal.FormKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+  begin
+    Key := #0;
+    Perform(WM_NEXTDLGCTL, 0, 0);
+  end;
 end;
 
 { procedure TPrincipal.GetProcessorCoreCount;
@@ -225,21 +235,12 @@ begin
     Qry := TFDQuery.Create(Nil);
     Qry.Connection := dm.fdc;
     Qry.SQL.Clear;
-
     Qry.SQL.Add('select case ' + ' when valor = ''S'' then ''SIM''' +
       ' when valor = ''N'' then ''NAO''' + ' else valor ' + ' end as retorno ' +
       ' from ( ' + '    select to_char(monitorpdv.fn_getparametromonitor(' +
       QuotedStr(pGrupo) + ',' + QuotedStr(pParam) + ')) valor' +
       '    from dual) ');
     Qry.open;
-
-    { Qry.SQL.Add('select decode(to_Char(' + sUsuarioConsincoMonitor +
-      '.fn_getparametromonitor(' + QuotedStr(pGrupo) + ',' + QuotedStr(pParam) +
-      ')),''S'',''SIM'',''NAO'') Retorno from dual');
-      Qry.open;
-      showmessage(Qry.SQL.Text);
-    }
-
     Result := Qry.FieldByName('Retorno').AsString;
 
   finally
@@ -251,7 +252,7 @@ end;
 function TPrincipal.CorParametro(Valor: String): TColor;
 begin
   if SameText(Valor, 'NAO') then
-    Result := clRed
+    Result := clWebDarkOrange
   else
     Result := clMoneyGreen;
 end;
@@ -407,19 +408,22 @@ procedure TPrincipal.SpeedButton1Click(Sender: TObject);
 Var
   sQry, sQry1: TFDQuery;
   sListaMensagens: TStringList;
-  nPortaServidor, nTamanhoInput, nTamanhoOutput, a, nContErro: Integer;
-  Retorno: String;
+  nPortaServidor, nTamanhoInput, nTamanhoOutput, A, nContErro,
+    UsoProcesso: Integer;
+  Retorno, sIPServidor, sIPLocal: String;
   TempoInicial: TDateTime;
 
 begin
   try
-    a := 0;
+    A := 0;
     nContErro := 0;
     nPortaServidor := 0;
     nTamanhoInput := 0;
     nTamanhoOutput := 0;
     nContErro := 0;
     TempoInicial := Time();
+    sIPLocal := '';
+    sIPServidor := '';
 
     sListaMensagens := TStringList.Create;
     sListaMensagens.Clear;
@@ -455,65 +459,84 @@ begin
       ' GB', 'Resumo de capacidade livre identificado na análise atual do ambiente.',
       clMoneyGreen);
 
-    AdicionarItem('Informações de ambiente do servidor : ', '', clGray);
-    sQry.SQL.Clear;
-    sQry.SQL.Add('select nvl(to_Char(' + sUsuarioConsincoMonitor +
-      '.fn_getparametromonitor(''ServidorLocal'',''Port'')),7011) PortaServidor from dual');
-    sQry.open;
-
-    // Verificar porta do servidor
-    if sQry.FieldByName('PortaServidor').AsInteger <> 7011 then
-    begin
-      AdicionarItem('Porta comunicação servidor : ',
-        'Porta de comunicação do serviço do servidor de PDVS está configurada como : '
-        + sQry.FieldByName('PortaServidor').AsString +
-        ', que é diferente do padrão 7011, isto poderá causar problemas de comunicação com os PDVs , configure a porta do serviço nas configurações de "Servidor Local" do servidor de PDVs, para 7011 ',
-        clMoneyGreen);
-    end;
-    nPortaServidor := sQry.FieldByName('PortaServidor').AsInteger;
+    { AdicionarItem('Porta comunicação servidor : ',
+      TestaConexao(IntToStr(nPortaServidor)),
+      nPortaServidor), clMoneyGreen);
+      if sQry.FieldByName('PortaServidor').AsInteger <> 7011 then
+      begin
+      AdicionarItem('Porta comunicação servidor : ' + IntToStr(nPortaServidor),
+      'Porta de comunicação do serviço do servidor de PDVS está configurada como : '
+      + sQry.FieldByName('PortaServidor').AsString +
+      ', que é diferente do padrão 7011, isto poderá causar problemas de comunicação com os PDVs , configure a porta do serviço nas configurações de "Servidor Local" do servidor de PDVs, para 7011 ',
+      clMoneyGreen);
+      end;
+    }
 
     // Verificar IP do servidor.
+    // I.P. Local da maquina
+    AdicionarItem('Informações de ambiente do servidor : ', '', clGray);
+    sIPLocal := Trim(GetLocalIP);
     sQry.SQL.Clear;
     sQry.SQL.Add('select to_Char(' + sUsuarioConsincoMonitor +
       '.fn_getparametromonitor(''ServidorLocal'',''IP'')) IPServidor from dual');
     sQry.open;
-    if Trim(sQry.FieldByName('IPServidor').AsString) <> '' then
+
+    // I.P. Configurado no servidor
+    sIPServidor := Trim(sQry.FieldByName('IPServidor').AsString);
+
+    AdicionarItem('I.P. Servidor : ' + ValorNaoNulo(sIPServidor, sIPLocal),
+      'Configurações -> Configurações de XXXXX', clMoneyGreen);
+
+    if sIPServidor <> '' then
     begin
-      AdicionarItem('Porta comunicação servidor : ',
+      AdicionarItem('I.P. Servidor : ' + ValorNaoNulo(sIPServidor, sIPLocal),
         'Existe endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, ('
-        + Trim(sQry.FieldByName('IPServidor').AsString) +
+        + sIPServidor +
         ') isto faz com que o serviço se baseie neste I.P. configurado para inicialização, e não no I.P. da máquina local. ',
-        clMoneyGreen);
-
-      if Trim(sQry.FieldByName('IPServidor').AsString) <> Trim(GetLocalIP) then
+        clbLUE);
+    end;
+    if sIPServidor <> '' then
+      if sIPServidor <> sIPLocal then
       begin
-        AdicionarItem('Porta comunicação servidor :',
+        AdicionarItem('I.P. Servidor : ' + sIPServidor,
           'O endereço I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs, está DIFERENTE do I.P. da máquina do servidor, isto causará problemas na inicialização do serviço do servidor de PDVs.'
-          + 'I.P. Configurado : ' + Trim(sQry.FieldByName('IPServidor')
-          .AsString) + ' - I.P. da máquina do servidor : ' + Trim(GetLocalIP) +
+          + 'I.P. Configurado : ' + sIPServidor +
+          ' - I.P. da máquina do servidor : ' + sIPLocal +
           'Exclua o I.P. configurado das configurações de "Servidor Local" do servidor de PDVs, para que a aplicação considere o I.P. da máquina local, ou então configure o I.P. corretamente para evitar problemas na comunicação com os PDVs',
-          clMoneyGreen);
-
-        // Testa com o I.P. Configurado no servidor.
-        AdicionarItem('Porta comunicação servidor : ',
-          'O teste de conectividade com o serviço será executado, utilizando o I.P. configurado nas configurações de "Servidor Local" do servidor de PDVs : '
-          + Trim(sQry.FieldByName('IPServidor').AsString) + ' Porta : ',
-          clMoneyGreen);
-        // IntToStr(nPortaServidor));
-
-        AdicionarItem('Porta comunicação servidor : ',
-          TestaConexao(Trim(sQry.FieldByName('IPServidor').AsString),
-          nPortaServidor), clMoneyGreen);
+          clWebTomato);
       end;
+
+    // Verificar porta do servidor
+    sQry.SQL.Clear;
+    sQry.SQL.Add('select nvl(to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''ServidorLocal'',''Port'')),7011) PortaServidor from dual');
+    sQry.open;
+    nPortaServidor := sQry.FieldByName('PortaServidor').AsInteger;
+    if nPortaServidor <> 7011 then
+    begin
+      AdicionarItem('Porta comunicação servidor : ' + IntToStr(nPortaServidor),
+        'Porta de comunicação do serviço do servidor de PDVS está configurada como : '
+        + IntToStr(nPortaServidor) +
+        ', que é diferente do padrão 7011, isto poderá causar problemas de comunicação com os PDVs , configure a porta do serviço nas configurações de "Servidor Local" do servidor de PDVs, para 7011 ',
+        clWebTomato);
     end
     else
-    begin
-      AdicionarItem('Porta comunicação servidor : ',
-        'Verificando conectividade local do servidor de PDVs (Telnet) com o I.P da máquina local -> '
-        + Trim(GetLocalIP) + ' Porta : ' + IntToStr(nPortaServidor),
-        clMoneyGreen);
-      // redt1.Lines.Add(TestaConexao(Trim(GetLocalIP), nPortaServidor),clMoneyGreen););
-    end;
+      AdicionarItem('Porta comunicação servidor : ' + IntToStr(nPortaServidor),
+        'Porta : ' + IntToStr(nPortaServidor), clMoneyGreen);
+
+    AdicionarItem('Teste de conexão local com servidor : ',
+      'Verificando conectividade local do servidor de PDVs (Telnet) com o I.P configurado ou da máquina local -> '
+      + ValorNaoNulo(sIPServidor, sIPLocal) + ' Porta : ' +
+      IntToStr(nPortaServidor) + ' : ' + TestaConexao(ValorNaoNulo(sIPServidor,
+      IntToStr(nPortaServidor)), nPortaServidor), clMoneyGreen);
+
+    { AdicionarItem('Teste de conexão local com servidor : ',
+      'Verificando conectividade local do servidor de PDVs (Telnet) com o I.P da máquina local -> '
+      + ValorNaoNulo(Trim(sQry.FieldByName('IPServidor').AsString),
+      Trim(GetLocalIP)) + ' Porta : ' + sQry.FieldByName('PortaServidor')
+      .AsString + TestaConexao(ValorNaoNulo(Trim(sQry.FieldByName('IPServidor')
+      .AsString), sQry.FieldByName('PortaServidor').AsString)), clMoneyGreen);
+    }
 
     // Qtd PDVs Ativos
     sQry.SQL.Clear;
@@ -524,8 +547,8 @@ begin
     if not ValidarInfraestrutura(sQry.FieldByName('qtdePDV').AsInteger,
       GetProcessorCoreCount, EspacoEmDiscoLivre(), GetTotalMemory) then
     begin
-      AdicionarItem('Pré Requisitos',
-        ' Servidor fora dos pré requisitos ', clRed);
+      AdicionarItem('Pré Requisitos', ' Servidor fora dos pré requisitos ',
+        clWebTomato);
     end
     else
       AdicionarItem('Pré Requisitos', ' Servidor dentro dos pré requisitos ',
@@ -535,59 +558,147 @@ begin
     AdicionarItem('VERIFICANDO INFORMAÇÕES DE PARAMETROS DO SERVIDOR DE PDVS',
       '', clGray);
 
+    sListaMensagens.Clear;
     Retorno := GetParametroMonitor('ExportarMovimento', 'Ativo');
-    AdicionarItem('Exportação de movimento ativa : ' + Retorno,
-      'Exportacao de movimento', CorParametro(Retorno));
-
-    Retorno := GetParametroMonitor('ReceberMovimento', 'Ativo');
-    AdicionarItem('Recepção de movimento ativo : ' + Retorno,
-      'Recepção  de movimento', CorParametro(Retorno));
-
-    Retorno := GetParametroMonitor('ReceberMovimento', 'Ativo');
-    AdicionarItem('Recepção de movimento ativo : ' + Retorno,
-      'Recepção  de movimento', CorParametro(Retorno));
-
-    Retorno := GetParametroMonitor('Geral', 'IntegracaoConsinco');
-    AdicionarItem('Integração Consinco ? : ' + Retorno, 'Integração Consinco',
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Exportar Movimento : '
+      + iif(Retorno = 'SIM',
+      'Parametro ativo, movimentações serão exportadas normalmente para o ERP',
+      'Parametro configurado como NÃO, desta forma movimentações de PDV, NÃO serão exportadas para o ERP');
+    AdicionarItem('Exporta Movimento : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
-    // cleber
-    Retorno := GetParametroMonitor('Geral', 'Integracao');
-    AdicionarItem('Tipo de integração : ' + Retorno, 'Tipo de integração ',
+    sListaMensagens.Clear;
+    Retorno := GetParametroMonitor('ReceberMovimento', 'Ativo');
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Receber movimento : '
+      + iif(Retorno = 'SIM',
+      'Parametro ativo, movimentações do PDV serão enviadas para o servidor de PDVs',
+      'Parametro configurado como NÃO, desta forma movimentações de PDV, NÃO serão exportadas para o servidor de PDVS');
+    AdicionarItem('Receber Movimento : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
+    sListaMensagens.Clear;
     Retorno := GetParametroMonitor('GerarCargaMonitor', 'Ativo');
-    AdicionarItem('Geração de carga monitor ativo : ' + Retorno,
-      'Geração de carga monitor ativo ', CorParametro(Retorno));
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Cargas -> Gerar Carga Local : '
+      + iif(Retorno = 'SIM',
+      'Parametro ativo, geração de carga para o servidor de PDVs serão geradas normalmente',
+      'Parametro configurado como NÃO, cargas de cadastro NÃO serão geradas do ERP para o servidor de PDVs para ativar a geração, ajuste o parametro em ');
+    AdicionarItem('Gera Carga Monitor : ' + Retorno, sListaMensagens.Text,
+      CorParametro(Retorno));
 
+    sListaMensagens.Clear;
     Retorno := GetParametroMonitor('GerarCargaPDV', 'Ativo');
-    AdicionarItem('Geração de carga PDV ativo : ' + Retorno,
-      'Geração de carga PDV ativo ', CorParametro(Retorno));
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Cargas -> Gerar Carga para PDVs : '
+      + iif(Retorno = 'SIM',
+      'Parametro ativo, geração de carga para os PDVs serão geradas normalmente',
+      'Parametro configurado como NÃO, cargas de cadastro NÃO serão geradas do servidor de PDVs para os PDVs');
+    AdicionarItem('Gera Carga PDVs : ' + Retorno, sListaMensagens.Text,
+      CorParametro(Retorno));
 
+    sListaMensagens.Clear;
     Retorno := GetParametroMonitor('EnviarCargaPDV', 'Ativo');
-    AdicionarItem('Envia carga PDV ativo : ' + Retorno,
-      'Envia carga PDV ativo ', CorParametro(Retorno));
-
-    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraEmpresa');
-    AdicionarItem('ListaNegraEmpresa' + Retorno, 'ListaNegraEmpresa ',
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Cargas -> Enviar Carga para PDVs'
+      + iif(Retorno = 'SIM',
+      'Parametro ativo, envio de carga para os PDVs ocorrerão normalmente',
+      'Parametro configurado como NÃO, cargas de cadastro NÃO serão enviadas do servidor para os PDVs');
+    AdicionarItem('Envia Carga PDVs : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
-    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraSegmento');
-    AdicionarItem('ListaNegraSegmento' + Retorno, 'ListaNegraSegmento ',
+    sListaMensagens.Clear;
+    Retorno := GetParametroMonitor('Geral', 'Integracao');
+    sListaMensagens.Text := iif(Retorno = 'CONSINCO',
+      'Integração configurado como Consinco ',
+      'Integração xxxxxx diferente de Consinco, caso ERP seja Consinco deverá ser ajustado o parametro em Configurações -> Configurações de servidor de PDVs -> Gerais -> Integrado com ERP Consinco=SIM');
+    AdicionarItem('Envia Carga PDVs : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
-    Retorno := GetParametroMonitor('GerarCargaMonitor', 'ListaNegraDivisao');
-    AdicionarItem('ListaNegraDivisao' + Retorno, 'ListaNegraDivisao ',
+    sListaMensagens.Clear;
+    Retorno := GetParametroMonitor('Geral', 'IntegracaoConsinco');
+    sListaMensagens.Text := iif(Retorno = 'CONSINCO',
+      'Integração com ERP configurada como Consinco :  ',
+      'Integração com ERP configurada diferente de Consinco, caso ERP seja Consinco deverá ser ajustado o parametro em Configurações -> Configurações de servidor de PDVs -> Gerais -> Integrado com ERP Consinco=SIM');
+    AdicionarItem('Integração com o ERP Consinco : ' + Retorno,
+      sListaMensagens.Text, CorParametro(Retorno));
+
+    {
+
+      sQry.SQL.Clear;
+      sQry.SQL.Add('select to_Char(' + sUsuarioConsincoMonitor +
+      '.fn_getparametromonitor(''GerarCargaMonitor'',''ListaNegraEmpresa'')) ListaNegraEmpresa  from dual');
+
+      sQry.open;
+      if sQry.RecordCount > 0 then
+      while not sQry.Eof do
+      begin
+      sListaMensagens.Add('Entidade faltante :' + sQry.FieldByName('tabela')
+      .AsString);
+      sQry.Next;
+      end;
+      if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
+      CorParametro(Retorno));
+    }
+    // redt1.Lines.Add
+    // ('Empresas na lista de exceções para não importar carga do ERP ');
+
+    { if Trim(sQry.FieldByName('ListaNegraEmpresa').AsString) <> '' then
+      begin
+      redt1.Lines.Add(Trim(sQry.FieldByName('ListaNegraEmpresa').AsString));
+      end
+      else
+      redt1.Lines.Add('Nenhuma empresa na lista de exceções');
+    }
+
+    Retorno := ValorNaoNulo(GetParametroMonitor('GerarCargaMonitor',
+      'ListaNegraDivisao'), 'Nehuma');
+    sListaMensagens.Text := iif(Trim(Retorno) = 'Nehuma',
+      'Divisões na lista de exceções de carga para o servidor de PDVs : Nenhuma',
+      ' Configurações -> Configurações de servidor de PDVs -> Gerais -> XXXXX, Quando existe divisão configurada, cargas da divisão não serão geradas para o servidor de PDVs');
+    AdicionarItem('Lista Exeções Divisão : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
+    Retorno := ValorNaoNulo(GetParametroMonitor('GerarCargaMonitor',
+      'ListaNegraEmpresa'), 'Nenhuma');
+    sListaMensagens.Text := iif(Trim(Retorno) = 'Nehuma',
+      'Configurações -> Configurações de servidor de PDVs -> Gerais -> XXXXX ' +
+      'Empresa(s) na lista de exceções de carga para o servidor de PDVs : Nenhuma',
+      'Quando existe empresa configurada, cargas desta(s) empresa(s) não serão geradas para o servidor de PDVs');
+    AdicionarItem('Lista Exeções Empresas : ' + Retorno, sListaMensagens.Text,
+      CorParametro(Retorno));
+
+    Retorno := ValorNaoNulo(GetParametroMonitor('GerarCargaMonitor',
+      'ListaNegraSegmento'), 'Nenhum');
+    sListaMensagens.Text := iif(Trim(Retorno) = 'Nenhum',
+      'Segmentos na lista de exceções de carga para o servidor de PDVs : Nenhum',
+      'Configurações -> Configurações de servidor de PDVs -> Gerais -> XXXXX, Quando existe segmento configurado, cargas destes segmentos não serão geradas para o servidor de PDVs');
+    AdicionarItem('Lista Exeções Segmentos : ' + Retorno, sListaMensagens.Text,
+      CorParametro(Retorno));
+
+    // Parei aqui.
     Retorno := GetParametroMonitor('EnviarCargaPDV', 'Delegar');
-    AdicionarItem('Delegar' + Retorno, 'Delegar ', CorParametro(Retorno));
-
-    Retorno := GetParametroMonitor('Geral', 'UsoProcesso');
-    AdicionarItem('UsoProcesso' + Retorno, 'UsoProcesso ',
+    sListaMensagens.Text :=
+      'Configurações -> Configurações de servidor de PDVs -> Gerais ->  ' +
+      iif(Retorno = 'SIM',
+      'Parametro ativo, delegação de carga para os PDVs funcionando normalmente',
+      'Parametro configurado como NÃO, cargas de cadastro NÃO serão enviadas do servidor para os PDVs, para ativar o envio, ajuste o parametro em Configurações -> Configurações de servidor de PDVs -> Cargas -> Enviar Carga para PDVs -> Ativo=SIM');
+    AdicionarItem('Envia Carga PDVs : ' + Retorno, sListaMensagens.Text,
       CorParametro(Retorno));
 
-    // redt1.Lines.Add('Ultimas alterações em parametros ');
+    sListaMensagens.Clear;
+    Retorno := GetParametroMonitor('Geral', 'UsoProcesso');
+    UsoProcesso := StrToIntDef(GetParametroMonitor('Geral', 'UsoProcesso'), 0);
+    sListaMensagens.Text := iif(UsoProcesso = 100,
+      'Percentual de uso do monitor configurado como 100%, dentro do padrão recomendado',
+      Format('Percentual de uso do monitor configurado como %d%%, a performance de processamento do servidor ficará reduzida, recomendado configurar como 100%',
+      [UsoProcesso]));
+    AdicionarItem('Percentual de uso de processamento : ' +
+      IntToStr(UsoProcesso) + ' %', sListaMensagens.Text,
+      iif(UsoProcesso < 100, clWebTomato, clMoneyGreen));
+
     sListaMensagens.Clear;
     sQry.SQL.Clear;
     sQry.SQL.Add
@@ -595,7 +706,7 @@ begin
       + ' DBMS_LOB.SUBSTR(a.de, 4000, 1) AS De, ' +
       ' DBMS_LOB.SUBSTR(a.para, 4000, 1) AS Para ' + ' from ' +
       sUsuarioConsincoMonitor + '.vw_histmanutencao a ' +
-      ' order by a.dtahoremissao desc ' + ' FETCH FIRST 15 ROWS ONLY');
+      ' order by a.dtahoremissao desc ' + ' fetch first 15 rows only');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
@@ -615,18 +726,21 @@ begin
     else
       sListaMensagens.Add('Nenhum parametro altrado recentemente ! ');
 
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Ultimas alterações em parametros ', sListaMensagens.Text,
-        CorParametro(Retorno));
+    if Trim(sListaMensagens.Text) = '' then
+      AdicionarItem('Ultimas alterações em parametros :  Nehuma alteração',
+        'Nehuma alteração', clMoneyGreen)
+    else if Trim(sListaMensagens.Text) <> '' then
+      AdicionarItem('Ultimas alterações em parametros :', sListaMensagens.Text,
+        clWebTomato);
 
     nTamanhoInput := TamanhoDiretorio
       ('C:\C5Client\AcruxMonitor\Services\cache\input') div (1024 * 1024);
-    // redt1.Lines.Add('Tamanho diretório Input :');
-    // redt1.Lines.Add(IntToStr(nTamanhoInput) + ' MB');
     // if nTamanhoInput > 999 then
     // begin
-    AdicionarItem('INPUT  ', IntToStr(nTamanhoInput), clRed);
-    // redt1.SelAttributes.Color := clRed;
+    AdicionarItem('INPUT : ' + IntToStr(nTamanhoInput) + ' MB',
+      IntToStr(nTamanhoInput) + ' MB', iif(nTamanhoOutput > 999, clWebTomato,
+      clMoneyGreen));
+    // redt1.SelAttributes.Color := clWebTomato;
     // redt1.Lines.Add
     // ('Alerta : Tamanho do diretório INPUT muito grande, verificar possibilidade de exclusão do diretório');
     // end;
@@ -635,7 +749,9 @@ begin
       ('C:\C5Client\AcruxMonitor\Services\cache\output') div (1024 * 1024);
     // if nTamanhoOutput > 999 then
     // begin
-    AdicionarItem('OUTPUT  ', IntToStr(nTamanhoOutput), clRed);
+    AdicionarItem('OUTPUT : ' + IntToStr(nTamanhoOutput) + ' MB',
+      IntToStr(nTamanhoOutput) + ' MB', iif(nTamanhoOutput > 999, clWebTomato,
+      clMoneyGreen));
     // end;
 
     sQry.SQL.Clear;
@@ -657,7 +773,7 @@ begin
         { AdicionarItem(PadC(Trim(sQry.FieldByName('descricao').AsString), 20,
           ' ', False) + '|' + PadC(Trim(sQry.FieldByName('versao').AsString),
           20, ' ', False) + '|' + sQry.FieldByName('qtd_terminais')
-          .AsString, clRed);
+          .AsString, clWebTomato);
         }
 
         sQry.Next;
@@ -672,13 +788,14 @@ begin
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
-      AdicionarItem('PDVs com versão superior a versão do servidor' + Retorno,
-        'PDV SUPERIOR ', clRed);
+      AdicionarItem('PDVs com versão superior a versão do servidor : ' +
+        IntToStr(sQry.RecordCount), 'PDV SUPERIOR ', clWebTomato);
     end
     else
     begin
-      AdicionarItem('Nenhum PDV com versão superior a versão do servidor' +
-        Retorno, 'PDV SUPERIOR ', clMoneyGreen);
+      AdicionarItem('PDVs com versão superior a versão do servidor :  Nenhum ',
+        'Nehum PDV com versão a frente da versão do servidor de PDVs ',
+        clMoneyGreen);
     end;
 
     // redt1.Lines.Add('LOGS DO SERVIDOR DE PDVS');
@@ -687,7 +804,7 @@ begin
     sQry.SQL.Add
       ('select a.nroempresa,a.nrocheckout,a.dtamovimento,a.dtahoremissao,a.mensagem from '
       + sUsuarioConsincoMonitor + '.tb_logfalhaimportacao a');
-    for a := 1 to 5 do
+    for A := 1 to 5 do
     begin
       sQry.open;
       // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 5 ');
@@ -696,12 +813,12 @@ begin
         begin
           if nContErro = 0 then
           begin
-            // redt1.SelAttributes.Color := clRed;
+            // redt1.SelAttributes.Color := clWebTomato;
             // redt1.Lines.Add
             // ('Empresa | Nrocheckout | Dtamovimento | Dtahoremissao | Mensagem ');
             nContErro := 1;
           end;
-          // redt1.SelAttributes.Color := clRed;
+          // redt1.SelAttributes.Color := clWebTomato;
 
           AdicionarItem('Logs do Servidor ' + Retorno, 'Logs do Servidor ',
             clMoneyGreen);
@@ -722,11 +839,8 @@ begin
     end;
 
     nContErro := 0;
-    AdicionarItem('Verificando informações de cargas' + Retorno,
-      'Verificando informações de cargas ', clMoneyGreen);
-
-    AdicionarItem('Verificando Logs de falha em cargas ' + Retorno,
-      'Verificando Logs de falha em cargas  ', clGray);
+    AdicionarItem('Verificando informações de cargas',
+      'Verificando informações de cargas ', clGray);
 
     sListaMensagens.Clear;
     sQry.SQL.Clear;
@@ -736,7 +850,7 @@ begin
       ' AND lower(A.OBJECT_NAME) LIKE ''tbe_%'' AND lower(A.OBJECT_TYPE)  = ''table'' order by a.OBJECT_NAME');
     sQry.open;
     if sQry.RecordCount > 0 then
-      for a := 1 to 3 do
+      for A := 1 to 3 do
       begin
         // redt1.Lines.Add('Etapa ' + IntToStr(a) + ' de 3 ');
         while not sQry.Eof do
@@ -759,10 +873,12 @@ begin
 
         sQry.First;
       end;
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Falha de carga encontrada na tabela ',
-        sListaMensagens.Text, CorParametro(Retorno));
 
+    // Exemplo / Modelo
+    AdicionarItem('Logs de falha em cargas ',
+      iif(Trim(sListaMensagens.Text) = '', 'Nenhuma fala de carga enconrada',
+      '' + Trim(sListaMensagens.Text)), iif(Trim(sListaMensagens.Text) <> '',
+      clWebTomato, clMoneyGreen));
 
     // Carga ERP -> Monitor
     // AdicionarItem('Verificando entidades de carga inexistens no processo de carga do ERP para o monitor',
@@ -770,7 +886,6 @@ begin
 
     // redt1.Lines.Add
     // ('Verificando entidades de carga inexistens no processo de carga do ERP para o monitor');
-
     sListaMensagens.Clear;
     sQry.SQL.Clear;
     sQry.SQL.Add
@@ -798,7 +913,6 @@ begin
     // Carga  Monitor -> PDV
     // redt1.Lines.Add
     // ('Verificando entidades de carga inexistens no processo de carga do monitor para o PDV');
-
     sListaMensagens.Clear;
     sQry.SQL.Clear;
     sQry.SQL.Add
@@ -813,18 +927,19 @@ begin
     if sQry.RecordCount > 0 then
       while not sQry.Eof do
       begin
-        sListaMensagens.Add('Entidade faltante :' + sQry.FieldByName('tabela')
-          .AsString);
+        sListaMensagens.Add('Entidade inexistente :' +
+          sQry.FieldByName('tabela').AsString);
         sQry.Next;
       end;
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem
-        ('Verificando entidades de carga inexistens no processo de carga do monitor para o PDV : ',
-        sListaMensagens.Text, CorParametro(Retorno));
+
+    AdicionarItem
+      ('Entidades de carga inexistens no processo de carga do monitor para o PDV : ',
+      iif(Trim(sListaMensagens.Text) = '', 'Todas entidades encontradas',
+      Trim(sListaMensagens.Text)), iif(Trim(sListaMensagens.Text) <> '',
+      clWebTomato, clMoneyGreen));
 
     // redt1.Lines.Add
     // ('Verificando entidades de carga do monitor para o ERP inativas');
-
     sListaMensagens.Clear;
     sQry.SQL.Clear;
     sQry.SQL.Add
@@ -837,9 +952,11 @@ begin
           .AsString);
         sQry.Next;
       end;
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
-        CorParametro(Retorno));
+    AdicionarItem
+      ('Entidades de carga do ERP para o servidor de PDVs inativas  : ',
+      iif(Trim(sListaMensagens.Text) = '', 'Nenhuma entidade inativa',
+      Trim(sListaMensagens.Text)), iif(Trim(sListaMensagens.Text) <> '',
+      clWebTomato, clMoneyGreen));
 
     // redt1.Lines.Add
     // ('Verificando entidades de carga do Monitor para o PDV inativas');
@@ -856,9 +973,10 @@ begin
           .AsString);
         sQry.Next;
       end;
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Entidade faltante : ', sListaMensagens.Text,
-        CorParametro(Retorno));
+    AdicionarItem('Entidades de carga do Monitor para o PDV inativas : ',
+      iif(Trim(sListaMensagens.Text) = '', 'Nenhuma entidade inativa',
+      Trim(sListaMensagens.Text)), iif(Trim(sListaMensagens.Text) <> '',
+      clWebTomato, clMoneyGreen));
 
     // redt1.Lines.Add('Verificando logs do monitor (-3 dias)');
     sListaMensagens.Clear;
@@ -884,8 +1002,7 @@ begin
       end;
     end;
     if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Log Monitor : ', sListaMensagens.Text,
-        CorParametro(Retorno));
+      AdicionarItem('Log Monitor : ', sListaMensagens.Text, clWebTomato);
 
     // redt1.Lines.Add
     // ('Verificando logs de falha de exportação do  monitor (-3 dias)');
@@ -996,18 +1113,22 @@ begin
 
       // terminar de implementar
       // if integracao = 'consinco' then
-      sQry.SQL.Clear;
-      sQry.SQL.Add('select max(a.dtahoremissao) dtahoremissao from ' +
-        sUsuarioConsinco +
-        '.mfl_doctofiscal a  where a.pdvorigem = 1 and a.dtamovimento >= trunc(sysdate)-3');
-      sQry.open;
-      if sQry.RecordCount > 0 then
-      begin
-        AdicionarItem('Data/Hora do ultimo movimento integrado no ERP',
-          'Data/Hora do ultimo movimento integrado no servidor de PDVs dos últimos 03 dias (TB_DOCTO) : '
-          + sQry.FieldByName('dtahoremissao').AsString, clMoneyGreen);
-      end;
 
+      if GetParametroMonitor('Geral', 'IntegracaoConsinco') = 'IntegracaoConsinco'
+      then
+      begin
+        sQry.SQL.Clear;
+        sQry.SQL.Add('select max(a.dtahoremissao) dtahoremissao from ' +
+          sUsuarioConsinco +
+          '.mfl_doctofiscal a  where a.pdvorigem = 1 and a.dtamovimento >= trunc(sysdate)-3');
+        sQry.open;
+        if sQry.RecordCount > 0 then
+        begin
+          AdicionarItem('Data/Hora do ultimo movimento integrado no ERP',
+            'Data/Hora do ultimo movimento integrado no servidor de PDVs dos últimos 03 dias (TB_DOCTO) : '
+            + sQry.FieldByName('dtahoremissao').AsString, clMoneyGreen);
+        end;
+      end;
       // redt1.Lines.Add('Cargas totais geradas no dia de hoje ');
       sQry.SQL.Clear;
       sQry.SQL.Add(' select a.tabela, ' + ' case ' +
@@ -1052,16 +1173,22 @@ begin
 
       // Sessoes ativa do banco
       // Exibir as sessões ativas e não somente a qtde
-      sQry.SQL.Clear;
-      sQry.SQL.Add
-        ('select count(1) qtdSessaoAtiva from  V$SESSION a where lower(a.SCHEMANAME) in ('
-        + QuotedStr(sUsuarioConsinco) + ',' + QuotedStr(sUsuarioConsincoMonitor)
-        + ') AND lower(a.status) = ''active''');
-      sQry.open;
-      if sQry.RecordCount > 0 then
+
+      if GetParametroMonitor('Geral', 'IntegracaoConsinco') = 'IntegracaoConsinco'
+      then
       begin
-        AdicionarItem('Quantidade de sessoes ativas : ',
-          sQry.FieldByName('qtdSessaoAtiva').AsString, clMoneyGreen);
+        sQry.SQL.Clear;
+        sQry.SQL.Add
+          ('select count(1) qtdSessaoAtiva from  V$SESSION a where lower(a.SCHEMANAME) in ('
+          + QuotedStr(sUsuarioConsinco) + ',' +
+          QuotedStr(sUsuarioConsincoMonitor) +
+          ') AND lower(a.status) = ''active''');
+        sQry.open;
+        if sQry.RecordCount > 0 then
+        begin
+          AdicionarItem('Quantidade de sessoes ativas : ',
+            sQry.FieldByName('qtdSessaoAtiva').AsString, clMoneyGreen);
+        end;
       end;
 
       // Sessoes em locck no banco
@@ -1083,7 +1210,7 @@ begin
       sQry.open;
       if sQry.RecordCount > 0 then
       begin
-        // Melhoria na visualização.
+        // Melhoria na visualização COLOCAR QUAL SESSÃO
         // redt1.Lines.Add('Sessões em Lock no banco de dados');
         // redt1.Lines.Add
         // ('sessao_bloqueada | usuario_bloqueado | maquina_bloqueada | usuario_bloqueador | maquina_bloqueadora | sistema_operacional_bloqueador | id1 | id2 | type ');
@@ -1127,8 +1254,11 @@ begin
       end;
     end;
 
-    // redt1.Lines.Add('Linguagem (nls_language)');
-    sQry.SQL.Clear;
+    // Parametros técnicos do banco de dados.
+    AdicionarItem('PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE ',
+      'PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE', clGray);
+
+    asdaf sQry.SQL.Clear;
     sQry.SQL.Add
       ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_language''');
     sQry.open;
@@ -1140,7 +1270,7 @@ begin
       begin
         AdicionarItem('Linguagem (nls_language) ',
           'Nls_language do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1156,7 +1286,7 @@ begin
       begin
         AdicionarItem('Linguagem (Nls_territory) ',
           'Nls_territory do banco de dados, diferente de AMERICA, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1172,7 +1302,7 @@ begin
       begin
         AdicionarItem('Linguagem (Nls_date_language) ',
           'Nls_date_language do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1188,7 +1318,7 @@ begin
       begin
         AdicionarItem('Linguagem de moeda (nls_currency ',
           'Nls_currency do banco de dados, diferente de AMERICAN, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1204,7 +1334,7 @@ begin
       begin
         AdicionarItem('Separadores decimais / milhar (nls_numeric_characters)',
           'Nls_numeric_characters do banco de dados, diferente de .,(Ponto e Virgula), que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA, esta configuração, poderá causar problemas em cargas de cadastros',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1215,7 +1345,7 @@ begin
 
     sQry.SQL.Clear;
     sQry.SQL.Add
-      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_format');
+      ('select a.VALUE valor from v$parameter a where lower(a.name) like ''nls_date_format''');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
@@ -1225,7 +1355,7 @@ begin
       begin
         AdicionarItem('Separadores decimais / milhar (nls_numeric_characters)',
           'Nls_date_format do banco de dados, diferente de DD-MON-RR, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1241,7 +1371,7 @@ begin
       begin
         AdicionarItem('Nls_time_format',
           'Nls_time_format do banco de dados, diferente de HH.MI.SSXFF AM, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1258,7 +1388,7 @@ begin
       begin
         AdicionarItem('nls_timestamp_format',
           'nls_timestamp_format do banco de dados, diferente de HH.MI.SSXFF AM, que é o padrão recomendado pela TOTVs , solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1274,19 +1404,16 @@ begin
       begin
         AdicionarItem('Nls_sort',
           'Nls_sort do banco de dados, diferente de BINARY, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
-
-    // Parametros técnicos do banco de dados.
-    AdicionarItem('PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE ',
-      'PARAMETROS TECNICOS DO BANCO DE DADOS - PERFORMANCE', clGray);
 
     // Utilizar versão Oracle Database homologada (ver tópico Oracle Database Homologados).
     // Utilizar character set no padrão WE8MSWIN1252.
     // Utililizar national character set no padrão AL16UTF16.
 
     // Melhoria
+    sQry.SQL.Clear;
     sQry.SQL.Add
       ('SELECT lower(VALUE) VALOR FROM v$parameter WHERE lower(NAME) = ''optimizer_mode''');
     sQry.open;
@@ -1297,7 +1424,7 @@ begin
         'Parametro do banco de dados "optimizer_mode" configurado como  ' +
         Trim(sQry.FieldByName('valor').AsString) +
         ' padrão TOTVS =  CHOOSE ou ALL_ROWS, informar o DBA para ajuste, documentação em Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
-        clRed);
+        clWebTomato);
     end;
 
     sQry.SQL.Clear;
@@ -1312,14 +1439,14 @@ begin
       begin
         AdicionarItem('Nls_sort',
           'Nls_sort do banco de dados, diferente de BINARY, que é o padrão recomendado pela TOTVs, solicitar para cliente verificar com seu DBA',
-          clRed);
+          clWebTomato);
       end;
     end;
 
     // Melhoria
     sQry.SQL.Clear;
     sQry.SQL.Add
-      ('SELECT a.VALUE VALOR FROM v$parameter a WHERE a.lower(NAME) = ''cursor_sharing''');
+      ('SELECT a.VALUE VALOR FROM v$parameter a WHERE lower(NAME) = ''cursor_sharing''');
     sQry.open;
     if sQry.RecordCount > 0 then
     begin
@@ -1329,7 +1456,7 @@ begin
       begin
         AdicionarItem('cursor_sharing',
           'Parametro "cursor_sharing" do banco de dados, diferente de EXACT, que é o padrão recomendado pela TOTVs, documentação em Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1346,7 +1473,7 @@ begin
       begin
         AdicionarItem('result_cache_mode',
           'result_cache_mode" do banco de dados, diferente de MANUAL, que é o padrão recomendado pela TOTVs',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1363,7 +1490,7 @@ begin
       begin
         AdicionarItem('open_cursors',
           'Parametro "open_cursors" do banco de dados, menor que 2000, que é o padrão recomendado pela TOTVs',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1380,7 +1507,7 @@ begin
       begin
         AdicionarItem('optimizer_index_cost_adj',
           'Parametro "optimizer_index_cost_adj" do banco de dados, menor que 2000, que é o padrão recomendado pela TOTVs',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1398,7 +1525,7 @@ begin
       begin
         AdicionarItem('optimizer_index_caching',
           'Parametro "optimizer_index_caching" do banco de dados, menor que 90, que é o padrão recomendado pela TOTVs, Link documentação : https://tdn.totvs.com/display/public/TVSCCLC/Servidor+de+Banco+de+Dados',
-          clRed);
+          clWebTomato);
       end;
     end;
 
@@ -1428,30 +1555,31 @@ begin
       AdicionarItem('Nenhuma tabela com estatisca coletada encontrada ',
         'Nenhuma tabela com estatisca coletada encontrada', clMoneyGreen);
 
-    sQry.SQL.Clear;
-    sQry.SQL.Add
-      ('select a.OBJECT_NAME Objeto,a.status,count(1) over() qtde from dba_objects a where lower(status) != ''valid'' and lower(OWNER) in ('
-      + QuotedStr(sUsuarioConsinco) + ')');
-    sQry.open;
-    if sQry.RecordCount > 0 then
+    if GetParametroMonitor('Geral', 'IntegracaoConsinco') = 'IntegracaoConsinco'
+    then
     begin
-      while not sQry.Eof do
+      sQry.SQL.Clear;
+      sQry.SQL.Add
+        ('select a.OBJECT_NAME Objeto,a.status,count(1) over() qtde from dba_objects a where lower(status) != ''valid'' and lower(OWNER) in ('
+        + QuotedStr(sUsuarioConsinco) + ')');
+      sQry.open;
+      if sQry.RecordCount > 0 then
       begin
-        sListaMensagens.Add(sQry.FieldByName('Objeto').AsString + ' | ' +
-          sQry.FieldByName('status').AsString);
-        sQry.Next;
+        while not sQry.Eof do
+        begin
+          sListaMensagens.Add(sQry.FieldByName('Objeto').AsString + ' | ' +
+            sQry.FieldByName('status').AsString);
+          sQry.Next;
+        end;
       end;
+      if Trim(sListaMensagens.Text) <> '' then
+        AdicionarItem('Verificando objetos inválidos usuário : ',
+          sListaMensagens.Text, clWebTomato)
+      else
+        AdicionarItem('Nenhum objeto invalido ', 'Nenhum objeto invalido',
+          clMoneyGreen);
     end;
-    if Trim(sListaMensagens.Text) <> '' then
-      AdicionarItem('Verificando objetos inválidos usuário : ',
-        sListaMensagens.Text, clRed)
-    else
-      AdicionarItem('Nenhum objeto invalido ', 'Nenhum objeto invalido',
-        clMoneyGreen);
 
-    // pb1.Position := pb1.Position + 1;
-    // redt1.SelAttributes.Style := [fsBold];
-    // redt1.Lines.Add('Verificando informações TABLESPACE ');
     sQry.SQL.Clear;
     sQry.SQL.Add
       ('select a.tablespace_name,Round(USED_PERCENT, 2) PercUso from DBA_TABLESPACE_USAGE_METRICS a order by 2');
@@ -1465,7 +1593,7 @@ begin
       end;
     if Trim(sListaMensagens.Text) <> '' then
       AdicionarItem('Verificando informações TABLESPACE : ',
-        sListaMensagens.Text, clRed)
+        sListaMensagens.Text, clWebTomato)
     else
       AdicionarItem('Verificando informações TABLESPACE',
         'Verificando informações TABLESPACE', clMoneyGreen);
@@ -1485,7 +1613,7 @@ begin
       clMoneyGreen);
 
     AdicionarItem(' Total análises : ',
-      'analises realizadas(99) , Tempo total :' +
+      'analises realizadas(XXXX) , Tempo total :' +
       TimeToStr(Time() - TempoInicial) + ' segundos', clMoneyGreen);
 
   finally
@@ -1561,9 +1689,9 @@ begin
     begin
       Result := 'Falha ao conectar telnet ' + E.Message;
       { if PGCPrincipal.ActivePage = tabPrincipal then
-        redt1.SelAttributes.Color := clRed
+        redt1.SelAttributes.Color := clWebTomato
         else if PGCPUtil.ActivePage = TabAnalise then
-        RdtConectividade.SelAttributes.Color := clRed;
+        RdtConectividade.SelAttributes.Color := clWebTomato;
       }
     end;
   end;
@@ -1867,7 +1995,7 @@ begin
 
   Finally
     if (sListaArquivos.Count > 0) or (sListaDiretorio.Count > 0) then
-      // AdicionarItem('Verificando estrutura de arquivos / diretórios', clRed)
+      // AdicionarItem('Verificando estrutura de arquivos / diretórios', clWebTomato)
     else
       // AdicionarItem('Verificando estrutura de arquivos / diretórios',
       // clMoneyGreen);
@@ -2013,7 +2141,7 @@ end;
 
 function TPrincipal.EncontrarUnidadeAcrux: string;
 var
-  Drive: char;
+  Drive: Char;
   Caminho: string;
 begin
   Result := 'não encontrado';
@@ -2211,6 +2339,14 @@ begin
     Result := Verdadeiro
   else
     Result := Falso;
+end;
+
+function TPrincipal.ValorNaoNulo(const A, B: string): string;
+begin
+  if Trim(A) <> '' then
+    Result := A
+  else
+    Result := B;
 end;
 
 end.
