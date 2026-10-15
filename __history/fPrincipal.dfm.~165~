@@ -28,7 +28,7 @@ object Principal: TPrincipal
     BevelOuter = bvLowered
     Enabled = False
     TabOrder = 0
-    ExplicitHeight = 661
+    ExplicitHeight = 653
     object btnStart: TSpeedButton
       Left = 5
       Top = 8
@@ -48,6 +48,7 @@ object Principal: TPrincipal
       Top = 120
       Width = 55
       Height = 50
+      OnClick = SpeedButton3Click
     end
     object SpeedButton4: TSpeedButton
       Left = 5
@@ -118,18 +119,18 @@ object Principal: TPrincipal
     BevelInner = bvRaised
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 808
-    ExplicitHeight = 661
+    ExplicitWidth = 806
+    ExplicitHeight = 653
     object pgPrincipal: TPageControl
       Left = 2
       Top = 2
       Width = 806
       Height = 661
-      ActivePage = TabMonitor
+      ActivePage = TabAmbiente
       Align = alClient
       TabOrder = 0
-      ExplicitWidth = 804
-      ExplicitHeight = 657
+      ExplicitWidth = 802
+      ExplicitHeight = 649
       object TabAmbiente: TTabSheet
         Caption = 'Ambiente'
         ImageName = 'TabAmbiente'
@@ -141,6 +142,10 @@ object Principal: TPrincipal
           ItemHeight = 13
           TabOrder = 0
           OnDrawItem = LstPrincipalDrawItem
+          OnKeyDown = LstPrincipalKeyDown
+          OnKeyPress = LstPrincipalKeyPress
+          OnKeyUp = LstPrincipalKeyUp
+          OnMouseUp = LstPrincipalMouseUp
         end
         object MemoResult: TMemo
           Left = 0
@@ -154,8 +159,8 @@ object Principal: TPrincipal
           TabOrder = 1
         end
         object Button1: TButton
-          Left = 648
-          Top = 136
+          Left = 424
+          Top = 168
           Width = 75
           Height = 25
           Caption = 'Button1'
@@ -166,10 +171,13 @@ object Principal: TPrincipal
       object TabRede: TTabSheet
         Caption = 'Rede'
         ImageIndex = 2
+        TabVisible = False
       end
       object TabMonitor: TTabSheet
         Caption = 'Monitor'
         ImageIndex = 1
+        OnEnter = TabMonitorEnter
+        OnExit = TabMonitorExit
         object chMonitor: TChart
           Left = 0
           Top = 0
@@ -179,55 +187,10 @@ object Principal: TPrincipal
             'TChart')
           Align = alClient
           TabOrder = 0
-          ExplicitWidth = 796
-          ExplicitHeight = 629
+          ExplicitWidth = 794
+          ExplicitHeight = 621
           DefaultCanvas = 'TGDIPlusCanvas'
           ColorPaletteIndex = 13
-          object Series1: TFastLineSeries
-            HoverElement = []
-            Title = 'FastLineSeries0'
-            LinePen.Color = 10708548
-            XValues.Name = 'X'
-            XValues.Order = loAscending
-            YValues.Name = 'Y'
-            YValues.Order = loNone
-          end
-          object Series2: TFastLineSeries
-            HoverElement = []
-            Title = 'FastLineSeries1'
-            LinePen.Color = 3513587
-            XValues.Name = 'X'
-            XValues.Order = loAscending
-            YValues.Name = 'Y'
-            YValues.Order = loNone
-          end
-          object Series3: TFastLineSeries
-            HoverElement = []
-            Title = 'FastLineSeries2'
-            LinePen.Color = 1330417
-            XValues.Name = 'X'
-            XValues.Order = loAscending
-            YValues.Name = 'Y'
-            YValues.Order = loNone
-          end
-          object Series4: TFastLineSeries
-            HoverElement = []
-            Title = 'FastLineSeries3'
-            LinePen.Color = 11048782
-            XValues.Name = 'X'
-            XValues.Order = loAscending
-            YValues.Name = 'Y'
-            YValues.Order = loNone
-          end
-          object Series5: TFastLineSeries
-            HoverElement = []
-            Title = 'FastLineSeries4'
-            LinePen.Color = 7028779
-            XValues.Name = 'X'
-            XValues.Order = loAscending
-            YValues.Name = 'Y'
-            YValues.Order = loNone
-          end
         end
       end
       object tabLogin: TTabSheet

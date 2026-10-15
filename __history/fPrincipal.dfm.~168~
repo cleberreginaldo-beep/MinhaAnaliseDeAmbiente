@@ -48,6 +48,7 @@ object Principal: TPrincipal
       Top = 120
       Width = 55
       Height = 50
+      OnClick = SpeedButton3Click
     end
     object SpeedButton4: TSpeedButton
       Left = 5
@@ -141,6 +142,7 @@ object Principal: TPrincipal
           ItemHeight = 13
           TabOrder = 0
           OnDrawItem = LstPrincipalDrawItem
+          OnKeyDown = LstPrincipalKeyDown
         end
         object MemoResult: TMemo
           Left = 0
@@ -154,8 +156,8 @@ object Principal: TPrincipal
           TabOrder = 1
         end
         object Button1: TButton
-          Left = 648
-          Top = 136
+          Left = 424
+          Top = 168
           Width = 75
           Height = 25
           Caption = 'Button1'
@@ -165,10 +167,13 @@ object Principal: TPrincipal
       object TabRede: TTabSheet
         Caption = 'Rede'
         ImageIndex = 2
+        TabVisible = False
       end
       object TabMonitor: TTabSheet
         Caption = 'Monitor'
         ImageIndex = 1
+        OnEnter = TabMonitorEnter
+        OnExit = TabMonitorExit
         object chMonitor: TChart
           Left = 0
           Top = 0
@@ -178,6 +183,8 @@ object Principal: TPrincipal
             'TChart')
           Align = alClient
           TabOrder = 0
+          ExplicitWidth = 794
+          ExplicitHeight = 621
           DefaultCanvas = 'TGDIPlusCanvas'
           ColorPaletteIndex = 13
         end

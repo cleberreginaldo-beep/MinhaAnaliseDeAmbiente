@@ -48,6 +48,7 @@ object Principal: TPrincipal
       Top = 120
       Width = 55
       Height = 50
+      OnClick = SpeedButton3Click
     end
     object SpeedButton4: TSpeedButton
       Left = 5
@@ -128,8 +129,6 @@ object Principal: TPrincipal
       ActivePage = TabAmbiente
       Align = alClient
       TabOrder = 0
-      ExplicitWidth = 802
-      ExplicitHeight = 649
       object TabAmbiente: TTabSheet
         Caption = 'Ambiente'
         ImageName = 'TabAmbiente'
@@ -138,7 +137,13 @@ object Principal: TPrincipal
           Top = 3
           Width = 800
           Height = 514
-          ItemHeight = 13
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = 12
+          Font.Name = 'Tahoma'
+          Font.Style = []
+          ItemHeight = 12
+          ParentFont = False
           TabOrder = 0
           OnDrawItem = LstPrincipalDrawItem
         end
@@ -161,6 +166,8 @@ object Principal: TPrincipal
       object TabMonitor: TTabSheet
         Caption = 'Monitor'
         ImageIndex = 1
+        OnEnter = TabMonitorEnter
+        OnExit = TabMonitorExit
         object chMonitor: TChart
           Left = 0
           Top = 0

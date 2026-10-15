@@ -48,6 +48,7 @@ object Principal: TPrincipal
       Top = 120
       Width = 55
       Height = 50
+      OnClick = SpeedButton3Click
     end
     object SpeedButton4: TSpeedButton
       Left = 5
@@ -125,11 +126,9 @@ object Principal: TPrincipal
       Top = 2
       Width = 806
       Height = 661
-      ActivePage = TabAmbiente
+      ActivePage = TabRede
       Align = alClient
       TabOrder = 0
-      ExplicitWidth = 802
-      ExplicitHeight = 649
       object TabAmbiente: TTabSheet
         Caption = 'Ambiente'
         ImageName = 'TabAmbiente'
@@ -153,15 +152,6 @@ object Principal: TPrincipal
           ScrollBars = ssVertical
           TabOrder = 1
         end
-        object Button1: TButton
-          Left = 648
-          Top = 136
-          Width = 75
-          Height = 25
-          Caption = 'Button1'
-          TabOrder = 2
-          OnClick = Button1Click
-        end
       end
       object TabRede: TTabSheet
         Caption = 'Rede'
@@ -170,6 +160,8 @@ object Principal: TPrincipal
       object TabMonitor: TTabSheet
         Caption = 'Monitor'
         ImageIndex = 1
+        OnEnter = TabMonitorEnter
+        OnExit = TabMonitorExit
         object chMonitor: TChart
           Left = 0
           Top = 0
