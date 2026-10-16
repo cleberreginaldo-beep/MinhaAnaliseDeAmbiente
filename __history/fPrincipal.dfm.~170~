@@ -12,9 +12,11 @@ object Principal: TPrincipal
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
+  KeyPreview = True
   Position = poDesktopCenter
   OnActivate = FormActivate
   OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
   TextHeight = 13
   object pnLateral: TPanel
     Left = 0
@@ -27,24 +29,26 @@ object Principal: TPrincipal
     Enabled = False
     TabOrder = 0
     ExplicitHeight = 653
-    object SpeedButton1: TSpeedButton
+    object btnStart: TSpeedButton
       Left = 5
-      Top = 9
+      Top = 8
       Width = 55
       Height = 50
-      OnClick = SpeedButton1Click
+      OnClick = btnStartClick
     end
     object SpeedButton2: TSpeedButton
       Left = 5
-      Top = 65
+      Top = 64
       Width = 55
       Height = 50
+      OnClick = SpeedButton2Click
     end
     object SpeedButton3: TSpeedButton
       Left = 5
       Top = 120
       Width = 55
       Height = 50
+      OnClick = SpeedButton3Click
     end
     object SpeedButton4: TSpeedButton
       Left = 5
@@ -58,12 +62,52 @@ object Principal: TPrincipal
       Width = 55
       Height = 50
     end
-    object SpeedButton6: TSpeedButton
+    object Label2: TLabel
+      Left = 11
+      Top = 358
+      Width = 41
+      Height = 13
+      Caption = 'Legenda'
+    end
+    object Bevel1: TBevel
       Left = 5
-      Top = 286
+      Top = 336
+      Width = 55
+      Height = 16
+      Shape = bsBottomLine
+    end
+    object pnOK: TPanel
+      Left = 5
+      Top = 383
       Width = 55
       Height = 50
-      OnClick = SpeedButton6Click
+      Hint = 'Informativo apenas'
+      ParentBackground = False
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 0
+    end
+    object pnFalha: TPanel
+      Left = 5
+      Top = 441
+      Width = 55
+      Height = 50
+      Hint = 'Ponto de aten'#231#227'o / falha'
+      ParentBackground = False
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 1
+    end
+    object pnAlerta: TPanel
+      Left = 5
+      Top = 499
+      Width = 55
+      Height = 50
+      Hint = 'Ponto de alerta'
+      ParentBackground = False
+      ParentShowHint = False
+      ShowHint = True
+      TabOrder = 2
     end
   end
   object Panel2: TPanel
@@ -82,13 +126,14 @@ object Principal: TPrincipal
       Top = 2
       Width = 806
       Height = 661
-      ActivePage = tabLogin
+      ActivePage = TabAmbiente
       Align = alClient
       TabOrder = 0
       ExplicitWidth = 802
       ExplicitHeight = 649
-      object TabAnalise: TTabSheet
-        Caption = 'tabAnalise'
+      object TabAmbiente: TTabSheet
+        Caption = 'Ambiente'
+        ImageName = 'TabAmbiente'
         object LstPrincipal: TListBox
           Left = 0
           Top = 3
@@ -109,14 +154,39 @@ object Principal: TPrincipal
           ScrollBars = ssVertical
           TabOrder = 1
         end
-      end
-      object TabMonitor: TTabSheet
-        Caption = 'tabMonitor'
-        ImageIndex = 1
+        object Button1: TButton
+          Left = 424
+          Top = 168
+          Width = 75
+          Height = 25
+          Caption = 'Button1'
+          TabOrder = 2
+        end
       end
       object TabRede: TTabSheet
         Caption = 'Rede'
         ImageIndex = 2
+        TabVisible = False
+      end
+      object TabMonitor: TTabSheet
+        Caption = 'Monitor'
+        ImageIndex = 1
+        OnEnter = TabMonitorEnter
+        OnExit = TabMonitorExit
+        object chMonitor: TChart
+          Left = 0
+          Top = 0
+          Width = 798
+          Height = 633
+          Title.Text.Strings = (
+            'TChart')
+          Align = alClient
+          TabOrder = 0
+          ExplicitWidth = 794
+          ExplicitHeight = 621
+          DefaultCanvas = 'TGDIPlusCanvas'
+          ColorPaletteIndex = 13
+        end
       end
       object tabLogin: TTabSheet
         Caption = 'Login'
@@ -175,6 +245,7 @@ object Principal: TPrincipal
             Width = 150
             Height = 21
             ImeName = 'Portuguese (Brazilian ABNT)'
+            PasswordChar = '*'
             CanUndoSelText = True
             TabOrder = 1
           end
@@ -205,5 +276,12 @@ object Principal: TPrincipal
     ReadTimeout = -1
     Left = 104
     Top = 578
+  end
+  object timerMonitor: TTimer
+    Enabled = False
+    Interval = 3000
+    OnTimer = timerMonitorTimer
+    Left = 760
+    Top = 42
   end
 end
